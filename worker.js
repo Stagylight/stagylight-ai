@@ -21,7 +21,23 @@ export default {
 
     try {
       const body = await request.json();
+if (body.action === "status" && body.url) {
+  const statusResponse = await fetch(body.url, {
+    headers: {
+      "Authorization": `Key ${env.FAL_KEY}`
+    }
+  });
 
+  const statusData = await statusResponse.text();
+
+  return new Response(statusData, {
+    status: statusResponse.status,
+    headers: {
+      ...corsHeaders,
+      "Content-Type": "application/json"
+    }
+  });
+}
       const response = await fetch(
         "https://queue.fal.run/fal-ai/flux/dev",
         {
