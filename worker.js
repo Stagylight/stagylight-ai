@@ -39,7 +39,7 @@ if (body.action === "status" && body.url) {
   });
 }
       const response = await fetch(
-        "https://queue.fal.run/fal-ai/flux/dev",
+        "https://queue.fal.run/fal-ai/flux/dev/image-to-image",
         {
           method: "POST",
           headers: {
