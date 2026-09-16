@@ -70,7 +70,7 @@ export default {
 
         num_inference_steps: 28,
 
-        guidance_scale: 3,
+        guidance_scale: 4,
 
         id_weight: 1.0, 
 
