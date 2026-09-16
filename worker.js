@@ -7,14 +7,21 @@ export default {
       "Access-Control-Allow-Methods": "POST, OPTIONS"
     };
 
-    // Handle CORS preflight
+    // ============================================================
+    // CORS
+    // ============================================================
+
     if (request.method === "OPTIONS") {
       return new Response(null, {
         headers: corsHeaders
       });
     }
 
-    // Simple GET test
+
+    // ============================================================
+    // SIMPLE GET TEST
+    // ============================================================
+
     if (request.method !== "POST") {
       return new Response(
         "STAGYLIGHT AI Worker is working!",
@@ -27,13 +34,78 @@ export default {
       );
     }
 
+
     try {
 
       const body = await request.json();
 
+
+      // ============================================================
+      // STAGYLIGHT AI JOB CONTROLLER
+      //
+      // This is the foundation for:
+      // Human Photo
+      // -> Stage 1 Identity Master
+      // -> Stage 2 Q Master
+      //
+      // For now this route only confirms that the Durable Object
+      // connection is working. Existing Android generation remains
+      // untouched below.
+      // ============================================================
+
+      if (body.action === "job_test") {
+
+        if (!env.AI_JOB_CONTROLLER) {
+          return jsonResponse(
+            {
+              ok: false,
+              error: "AI_JOB_CONTROLLER binding is unavailable."
+            },
+            500,
+            corsHeaders
+          );
+        }
+
+        const id = env.AI_JOB_CONTROLLER.idFromName(
+          "stagylight-main-ai-controller"
+        );
+
+        const controller = env.AI_JOB_CONTROLLER.get(id);
+
+        const controllerResponse = await controller.fetch(
+          new Request(
+            "https://stagylight.internal/job-test",
+            {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json"
+              },
+              body: JSON.stringify({
+                action: "job_test"
+              })
+            }
+          )
+        );
+
+        const controllerText = await controllerResponse.text();
+
+        return new Response(
+          controllerText,
+          {
+            status: controllerResponse.status,
+            headers: {
+              ...corsHeaders,
+              "Content-Type": "application/json"
+            }
+          }
+        );
+      }
+
+
       // ============================================================
       // STATUS / RESULT PROXY
-      // Keeps the existing STAGYLIGHT Android polling system working
+      //
+      // KEEP EXISTING ANDROID POLLING WORKING
       // ============================================================
 
       if (body.action === "status" && body.url) {
@@ -55,6 +127,7 @@ export default {
             status: statusResponse.status,
             headers: {
               ...corsHeaders,
+
               "Content-Type":
                 statusResponse.headers.get("Content-Type") ||
                 "application/json"
@@ -70,17 +143,12 @@ export default {
 
       if (!body.image_url) {
 
-        return new Response(
-          JSON.stringify({
-            error: "No reference image received."
-          }),
+        return jsonResponse(
           {
-            status: 400,
-            headers: {
-              ...corsHeaders,
-              "Content-Type": "application/json"
-            }
-          }
+            error: "No reference image received."
+          },
+          400,
+          corsHeaders
         );
       }
 
@@ -89,11 +157,8 @@ export default {
       // STAGE 1
       // HUMAN PHOTO -> IDENTITY MASTER
       //
-      // IMPORTANT:
-      // This stage is NOT supposed to create the final Q character.
-      //
-      // Its job is to establish a recognizable illustrated version
-      // of the SAME adult person before Q styling is applied.
+      // This is NOT the final Q character.
+      // Stage 1 protects the person's identity first.
       // ============================================================
 
       const identityPrompt = `
@@ -444,7 +509,7 @@ Generate exactly ONE centered square illustrated adult portrait.
 
 
       // ============================================================
-      // SUBMIT STAGE-1 JOB TO FAL
+      // SUBMIT STAGE 1 TO FAL
       // ============================================================
 
       const response = await fetch(
@@ -487,43 +552,94 @@ Generate exactly ONE centered square illustrated adult portrait.
 
     } catch (error) {
 
-      // ============================================================
-      // ERROR HANDLING
-      // ============================================================
+      return jsonResponse(
+        {
+          error: error.message
+        },
+        500,
+        corsHeaders
+      );
+    }
+  }
+};
+
+
+// ================================================================
+// JSON RESPONSE HELPER
+// ================================================================
+
+function jsonResponse(data, status, corsHeaders) {
+
+  return new Response(
+    JSON.stringify(data),
+    {
+      status: status,
+
+      headers: {
+        ...corsHeaders,
+        "Content-Type": "application/json"
+      }
+    }
+  );
+}
+
+
+// ================================================================
+// STAGYLIGHT DURABLE OBJECT
+//
+// This will later manage:
+//
+// Stage 1:
+// Human Photo -> Identity Master
+//
+// Stage 2:
+// Identity Master -> Cute Adult Q Master
+//
+// The actual two-stage automation is NOT enabled yet.
+// ================================================================
+
+export class AIJobController {
+
+  constructor(ctx, env) {
+    this.ctx = ctx;
+    this.env = env;
+  }
+
+
+  async fetch(request) {
+
+    try {
 
       return new Response(
         JSON.stringify({
+          ok: true,
+          controller: "AIJobController",
+          message: "STAGYLIGHT AI Job Controller is ready"
+        }),
+        {
+          status: 200,
+
+          headers: {
+            "Content-Type": "application/json"
+          }
+        }
+      );
+
+    } catch (error) {
+
+      return new Response(
+        JSON.stringify({
+          ok: false,
           error: error.message
         }),
         {
           status: 500,
 
           headers: {
-            ...corsHeaders,
             "Content-Type": "application/json"
           }
         }
       );
     }
-  }
-};
-export class AIJobController {
-  constructor(ctx, env) {
-    this.ctx = ctx;
-    this.env = env;
-  }
-
-  async fetch(request) {
-    return new Response(
-      JSON.stringify({
-        ok: true,
-        message: "STAGYLIGHT AI Job Controller is ready"
-      }),
-      {
-        headers: {
-          "Content-Type": "application/json"
-        }
-      }
-    );
   }
 }
