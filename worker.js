@@ -63,33 +63,46 @@ export default {
 
       const falBody = {
         prompt:
-          "Transform the person in this exact reference image into ONE cute " +
-          "high-quality Q-version chibi character. " +
+          "Edit the supplied photograph into ONE mildly stylized Q-version " +
+          "portrait of the EXACT SAME PERSON. FACIAL LIKENESS AND IDENTITY " +
+          "ARE THE HIGHEST PRIORITY. The finished portrait must remain " +
+          "immediately recognizable as the person in the source photograph. " +
 
-          "This is an IMAGE TRANSFORMATION, not a new character design. " +
-          "Keep the person clearly recognizable as the same individual. " +
+          "Do not invent, redesign, beautify or replace the face. Preserve " +
+          "the person's distinctive face shape, jawline, cheek proportions, " +
+          "forehead proportions, eyebrow shape and position, natural eye " +
+          "shape and spacing, nose shape and proportions, mouth shape, lip " +
+          "proportions and overall facial geometry from the source photograph. " +
 
-          "Preserve the exact visible hairstyle, hair length, hair colour, " +
-          "face shape, skin tone, eyebrows, eye shape, nose, mouth and " +
-          "visible gender presentation of the person in the source image. " +
+          "Keep the eyes close to their original natural shape and relative " +
+          "size. Do NOT create huge anime eyes. Do NOT add prominent eyelashes, " +
+          "eyeliner, eyeshadow, lipstick, makeup, cosmetic blush or feminine " +
+          "beautification that is not present in the source photograph. " +
 
-          "Preserve the same clothing type and main clothing colours shown " +
-          "in the source image. Do not redesign the person's outfit. " +
+          "Preserve the person's visible gender presentation exactly as shown " +
+          "in the source image. Do not feminize or masculinize the subject. " +
 
-          "Do not add long hair, makeup, lipstick, prominent eyelashes, " +
-          "facial hair, jewellery or accessories unless they already appear " +
-          "in the source image. " +
+          "Preserve the exact hairstyle, hair length, haircut, hair direction " +
+          "and hair colour visible in the source photograph. Do not lengthen " +
+          "the hair or redesign the hairstyle. " +
 
-          "Change only the visual style and body proportions into a polished " +
-          "Q-version chibi illustration with a slightly larger head and " +
-          "smaller body. Keep facial proportions recognizable rather than " +
-          "using extremely oversized anime eyes. " +
+          "Preserve the same clothing type, design and main colours visible " +
+          "in the source photograph. " +
 
-          "Generate exactly ONE character only. Do not create a character " +
-          "sheet, collage, multiple poses, multiple people, comparison image " +
-          "or alternate versions. " +
+          "Apply only MODERATE Q-version stylization. Use a slightly larger " +
+          "head and slightly simplified illustrated features, but keep the " +
+          "person's unique facial proportions and identity. The result should " +
+          "look like a recognizable illustrated miniature of the real person, " +
+          "not a generic anime character. " +
 
-          "Use a simple clean background and a friendly natural expression.",
+          "Cuteness is SECONDARY to facial likeness. If stronger chibi " +
+          "stylization would reduce recognition, preserve the realistic " +
+          "facial features instead. " +
+
+          "Generate exactly ONE person, ONE pose and ONE portrait. Do not " +
+          "generate a collage, character sheet, multiple versions or multiple people. " +
+
+          "Use a simple clean background.",
 
         image_url: body.image_url,
 
