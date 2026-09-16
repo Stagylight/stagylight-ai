@@ -1,5 +1,6 @@
 export default {
   async fetch(request, env) {
+
     const corsHeaders = {
       "Access-Control-Allow-Origin": "*",
       "Access-Control-Allow-Headers": "Content-Type",
@@ -25,6 +26,7 @@ export default {
     }
 
     try {
+
       const body = await request.json();
 
 
@@ -81,133 +83,105 @@ export default {
 
 
       // ==========================================
-      // STAGYLIGHT MY Q PROMPT
+      // STAGYLIGHT MY Q
       //
       // TARGET:
-      // 70% IDENTITY / 30% Q STYLIZATION
+      // 80% RECOGNIZABLE IDENTITY
+      // 20% CUTE Q STYLIZATION
       // ==========================================
 
       const falBody = {
 
         prompt:
 
-          "Transform the supplied photograph into ONE cute illustrated " +
-          "STAGYLIGHT Q-version portrait of the SAME PERSON. " +
+          "Create ONE cute STAGYLIGHT Q-version portrait of the " +
+          "EXACT SAME PERSON shown in the reference photograph. " +
 
-          "IMPORTANT: facial identity and recognizability are the highest " +
-          "priority. The finished Q-character must clearly look like the " +
-          "person in the supplied reference photograph, not like a generic " +
-          "anime or chibi character. " +
+          "The number one priority is facial identity. The finished " +
+          "character must be immediately recognizable as the same real " +
+          "person in the reference image. " +
 
+          "Preserve the person's distinctive face shape, forehead, " +
+          "jawline, cheeks, eyebrows, natural eye shape, eye spacing, " +
+          "nose shape, mouth shape, lips, skin tone and recognizable " +
+          "facial proportions. " +
 
-          "FACE IDENTITY: " +
+          "Do not replace these features with a generic anime face, " +
+          "generic doll face or generic chibi face. " +
 
-          "Preserve the person's distinctive facial structure and proportions. " +
-          "Preserve the original face shape, forehead proportions, jawline, " +
-          "cheek shape, eyebrow shape, eyebrow position, natural eye shape, " +
-          "eye spacing, nose shape, nose proportions, mouth shape, lip shape " +
-          "and overall facial geometry. " +
+          "Keep the person's natural eye shape recognizable. The eyes " +
+          "may be slightly larger and friendlier for Q styling, but do " +
+          "not make them dramatically larger or rounder. " +
 
-          "The illustrated face should feel like a simplified illustrated " +
-          "version of the real face rather than a newly designed cartoon face. " +
+          "Give the character a warm, happy and friendly natural smile. " +
+          "The expression should look cute and approachable without " +
+          "changing the person's identity. " +
 
+          "Preserve the visible gender presentation of the reference " +
+          "person exactly. Do not feminize or masculinize the person. " +
 
-          "EYES: " +
+          "Do not add lipstick, makeup, eyeliner, eyeshadow, prominent " +
+          "eyelashes or cosmetic blush unless clearly present in the " +
+          "reference photograph. " +
 
-          "Keep the person's natural eye shape and spacing recognizable. " +
-          "The eyes may be only slightly enlarged for Q-character styling. " +
-          "Do not create extremely large round anime eyes. " +
-          "Do not replace the person's natural eye shape with generic " +
-          "chibi eyes. " +
+          "Preserve the exact hairstyle, haircut, hair length, hairline, " +
+          "hair direction and hair colour shown in the reference image. " +
 
+          "Preserve the clothing type and main clothing colours shown " +
+          "in the reference image. " +
 
-          "EXPRESSION: " +
+          "Apply only moderate Q-version stylization: a slightly larger " +
+          "head, slightly smaller body and polished cute illustration " +
+          "finish. Keep the face substantially closer to the real person " +
+          "than to a generic cartoon character. " +
 
-          "Give the person a friendly, warm and natural expression with " +
-          "a gentle natural smile. Keep the expression believable and " +
-          "consistent with the person's facial structure. " +
-          "Do not create an exaggerated doll-like smile. " +
+          "Target approximately 80 percent recognizable real-person " +
+          "identity and 20 percent cute Q-character stylization. " +
 
+          "Generate exactly ONE person and ONE portrait. " +
+          "No collage, no character sheet, no alternate versions, " +
+          "no multiple poses and no additional people. " +
 
-          "GENDER PRESENTATION: " +
-
-          "Preserve the person's visible gender presentation exactly as " +
-          "shown in the reference photograph. Do not feminize or masculinize " +
-          "the person. " +
-
-          "Do not add makeup, lipstick, eyeliner, eyeshadow, prominent " +
-          "eyelashes, cosmetic blush or beauty styling unless those features " +
-          "are clearly present in the original photograph. " +
-
-
-          "HAIR: " +
-
-          "Preserve the hairstyle from the reference photograph. " +
-          "Keep the same haircut, hair length, hair direction, hairline " +
-          "and hair colour. Do not invent longer hair or redesign the hairstyle. " +
+          "Use a clean simple background.",
 
 
-          "CLOTHING: " +
+        reference_image_url: body.image_url,
 
-          "Preserve the clothing visible in the reference photograph. " +
-          "Keep the same clothing type and main colours. Do not replace the " +
-          "clothing with a costume, suit, school uniform, dress, skirt or " +
-          "unrelated outfit. " +
+        image_size: "square_hd",
 
+        num_inference_steps: 28,
 
-          "Q-VERSION STYLE: " +
+        guidance_scale: 4,
 
-          "Apply moderate cute Q-character proportions. Use a moderately " +
-          "larger head and smaller upper body while keeping the person's " +
-          "facial identity clearly recognizable. " +
+        true_cfg: 1,
 
-          "Use clean polished digital illustration, soft natural facial " +
-          "rendering and a friendly modern character design. " +
+        // Maximum supported identity weight
+        id_weight: 1.0,
 
-          "The result should look cute and approachable, but identity " +
-          "accuracy is more important than maximum cuteness. " +
+        negative_prompt:
+          "different person, wrong identity, identity loss, " +
+          "generic anime face, generic chibi face, generic doll face, " +
+          "different face shape, different eyes, different nose, " +
+          "different mouth, different jawline, gender change, " +
+          "different hairstyle, long hair, different hair colour, " +
+          "different clothing, dress, skirt, school uniform, " +
+          "heavy makeup, lipstick, eyeliner, eyeshadow, " +
+          "prominent eyelashes, exaggerated blush, " +
+          "huge anime eyes, oversized round eyes, " +
+          "multiple people, multiple characters, character sheet, " +
+          "collage, multiple poses, text, watermark, signature, " +
+          "blurry, low quality, deformed face, extra limbs",
 
-          "Aim approximately for 70 percent recognizable real-person " +
-          "identity and 30 percent cute Q-character stylization. " +
-
-
-          "DO NOT: " +
-
-          "Do not create a generic anime face. " +
-          "Do not create a generic doll face. " +
-          "Do not dramatically enlarge the eyes. " +
-          "Do not dramatically change the face shape. " +
-          "Do not change ethnicity or skin tone. " +
-          "Do not change gender presentation. " +
-          "Do not change hairstyle. " +
-          "Do not change clothing. " +
-          "Do not add unrelated accessories. " +
-          "Do not generate multiple characters. " +
-          "Do not create a collage or character sheet. " +
-
-
-          "Generate exactly ONE person, ONE portrait and ONE Q-character " +
-          "on a simple clean background.",
-
-
-        image_url: body.image_url,
-
-        num_images: 1,
-
-        aspect_ratio: "1:1",
-
-        output_format: "jpeg",
-
-        safety_tolerance: "2"
+        enable_safety_checker: true
       };
 
 
       // ==========================================
-      // SEND TO FAL.AI
+      // SEND TO FAL.AI FLUX PuLID
       // ==========================================
 
       const response = await fetch(
-        "https://queue.fal.run/fal-ai/flux-pro/kontext",
+        "https://queue.fal.run/fal-ai/flux-pulid",
         {
           method: "POST",
 
