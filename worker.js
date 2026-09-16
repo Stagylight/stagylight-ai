@@ -62,48 +62,54 @@ export default {
       }
 
       const falBody = {
-        reference_images: [
-          {
-            image_url: body.image_url
-          }
-        ],
+        prompt:
+          "Transform the person in this exact reference image into ONE cute " +
+          "high-quality Q-version chibi character. " +
 
-        prompt: body.prompt,
+          "This is an IMAGE TRANSFORMATION, not a new character design. " +
+          "Keep the person clearly recognizable as the same individual. " +
 
-        negative_prompt:
-          "different person, wrong identity, gender change, " +
-          "different hairstyle, different hair color, " +
-          "unrelated face, generic anime character, " +
-          "unwanted long hair, unwanted makeup, prominent eyelashes, " +
-          "unwanted dress, unwanted skirt, unrelated clothing, " +
-          "text, watermark, signature, blurry, low quality, " +
-          "deformed face, deformed eyes, extra limbs",
+          "Preserve the exact visible hairstyle, hair length, hair colour, " +
+          "face shape, skin tone, eyebrows, eye shape, nose, mouth and " +
+          "visible gender presentation of the person in the source image. " +
+
+          "Preserve the same clothing type and main clothing colours shown " +
+          "in the source image. Do not redesign the person's outfit. " +
+
+          "Do not add long hair, makeup, lipstick, prominent eyelashes, " +
+          "facial hair, jewellery or accessories unless they already appear " +
+          "in the source image. " +
+
+          "Change only the visual style and body proportions into a polished " +
+          "Q-version chibi illustration with a slightly larger head and " +
+          "smaller body. Keep facial proportions recognizable rather than " +
+          "using extremely oversized anime eyes. " +
+
+          "Generate exactly ONE character only. Do not create a character " +
+          "sheet, collage, multiple poses, multiple people, comparison image " +
+          "or alternate versions. " +
+
+          "Use a simple clean background and a friendly natural expression.",
+
+        image_url: body.image_url,
 
         num_images: 1,
 
-        image_size: "square_hd",
+        aspect_ratio: "1:1",
 
-        guidance_scale: 1.2,
+        output_format: "jpeg",
 
-        num_inference_steps: 4,
-
-        id_scale: 0.8,
-
-        mode: "fidelity",
-
-        id_mix: false
+        safety_tolerance: "2"
       };
 
       const response = await fetch(
-        "https://queue.fal.run/fal-ai/pulid",
+        "https://queue.fal.run/fal-ai/flux-pro/kontext",
         {
           method: "POST",
-
           headers: {
             "Authorization": `Key ${env.FAL_KEY}`,
             "Content-Type": "application/json"
           },
-
           body: JSON.stringify(falBody)
         }
       );
