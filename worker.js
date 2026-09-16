@@ -46,7 +46,6 @@ export default {
       // ==========================================
       // CREATE MY Q
       // ==========================================
-
       if (!body.image_url) {
         return new Response(
           JSON.stringify({
@@ -63,32 +62,40 @@ export default {
       }
 
       const falBody = {
+        reference_images: [
+          {
+            image_url: body.image_url
+          }
+        ],
+
         prompt: body.prompt,
-        reference_image_url: body.image_url,
-
-        image_size: "square_hd",
-
-        num_inference_steps: 28,
-
-        guidance_scale: 4,
-
-        id_weight: 1.0, 
-
-        true_cfg: 1,
 
         negative_prompt:
           "different person, wrong identity, gender change, " +
           "different hairstyle, different hair color, " +
           "unrelated face, generic anime character, " +
-          "unwanted dress, unwanted skirt, unwanted makeup, " +
+          "unwanted long hair, unwanted makeup, prominent eyelashes, " +
+          "unwanted dress, unwanted skirt, unrelated clothing, " +
           "text, watermark, signature, blurry, low quality, " +
-          "deformed face, extra limbs",
+          "deformed face, deformed eyes, extra limbs",
 
-        enable_safety_checker: true
+        num_images: 1,
+
+        image_size: "square_hd",
+
+        guidance_scale: 1.2,
+
+        num_inference_steps: 4,
+
+        id_scale: 0.8,
+
+        mode: "fidelity",
+
+        id_mix: false
       };
 
       const response = await fetch(
-        "https://queue.fal.run/fal-ai/flux-pulid",
+        "https://queue.fal.run/fal-ai/pulid",
         {
           method: "POST",
 
@@ -105,10 +112,8 @@ export default {
 
       return new Response(data, {
         status: response.status,
-
         headers: {
           ...corsHeaders,
-
           "Content-Type":
             response.headers.get("Content-Type") ||
             "application/json"
@@ -116,14 +121,12 @@ export default {
       });
 
     } catch (error) {
-
       return new Response(
         JSON.stringify({
           error: error.message
         }),
         {
           status: 500,
-
           headers: {
             ...corsHeaders,
             "Content-Type": "application/json"
