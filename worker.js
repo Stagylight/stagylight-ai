@@ -7,12 +7,14 @@ export default {
       "Access-Control-Allow-Methods": "POST, OPTIONS"
     };
 
+    // Handle CORS preflight
     if (request.method === "OPTIONS") {
       return new Response(null, {
         headers: corsHeaders
       });
     }
 
+    // Simple GET test
     if (request.method !== "POST") {
       return new Response(
         "STAGYLIGHT AI Worker is working!",
@@ -29,10 +31,10 @@ export default {
 
       const body = await request.json();
 
-
-      // ==========================================
-      // STATUS / RESULT REQUEST
-      // ==========================================
+      // ============================================================
+      // STATUS / RESULT PROXY
+      // Keeps the existing STAGYLIGHT Android polling system working
+      // ============================================================
 
       if (body.action === "status" && body.url) {
 
@@ -45,8 +47,7 @@ export default {
           }
         );
 
-        const statusData =
-          await statusResponse.text();
+        const statusData = await statusResponse.text();
 
         return new Response(
           statusData,
@@ -54,16 +55,18 @@ export default {
             status: statusResponse.status,
             headers: {
               ...corsHeaders,
-              "Content-Type": "application/json"
+              "Content-Type":
+                statusResponse.headers.get("Content-Type") ||
+                "application/json"
             }
           }
         );
       }
 
 
-      // ==========================================
-      // CREATE MY Q
-      // ==========================================
+      // ============================================================
+      // VALIDATE REFERENCE PHOTO
+      // ============================================================
 
       if (!body.image_url) {
 
@@ -82,193 +85,349 @@ export default {
       }
 
 
-      // ==========================================
-      // STAGYLIGHT MY Q
-      //
-      // TARGET:
-      // ~80% RECOGNIZABLE IDENTITY
-      // ~20% CUTE Q STYLIZATION
+      // ============================================================
+      // STAGE 1
+      // HUMAN PHOTO -> IDENTITY MASTER
       //
       // IMPORTANT:
-      // FULL HEAD + FULL HAIRSTYLE IN FRAME
-      // ==========================================
+      // This stage is NOT supposed to create the final Q character.
+      //
+      // Its job is to establish a recognizable illustrated version
+      // of the SAME adult person before Q styling is applied.
+      // ============================================================
+
+      const identityPrompt = `
+
+Create ONE premium illustrated portrait of the EXACT SAME PERSON
+shown in the supplied reference photograph.
+
+This is STAGYLIGHT IDENTITY MASTER — STAGE 1.
+
+THIS IS NOT THE FINAL Q-VERSION.
+
+Do NOT create a chibi character yet.
+Do NOT create a baby-like character.
+Do NOT substantially change the person's facial proportions.
+
+============================================================
+HIGHEST PRIORITY: PRESERVE THE PERSON'S IDENTITY
+============================================================
+
+The finished portrait must be immediately recognizable as the
+same real adult person shown in the supplied photograph.
+
+Treat the supplied photograph as the authoritative identity reference.
+
+Preserve the person's distinctive natural facial geometry.
+
+Carefully preserve:
+
+- overall face shape
+- forehead proportions
+- cheek structure
+- cheek width
+- jawline
+- chin shape
+- eyebrow shape
+- eyebrow position
+- natural eye shape
+- natural eye size
+- eye spacing
+- eyelid appearance
+- nose shape
+- nose width
+- nose proportions
+- mouth shape
+- lip proportions
+- natural facial balance
+- skin tone
+- visible distinctive facial characteristics
+
+Do NOT replace these features with generic anime features.
+
+Do NOT replace them with generic cartoon features.
+
+Do NOT beautify the person into a different-looking individual.
+
+The result should look like:
+
+"THIS EXACT REAL PERSON AS A PREMIUM DIGITAL ILLUSTRATION."
+
+It should NOT look like:
+
+"a new fictional character inspired by this person."
+
+============================================================
+ADULT APPEARANCE
+============================================================
+
+Preserve the apparent adult age and mature facial proportions
+shown in the reference photograph.
+
+The illustrated person must still clearly look like an adult.
+
+DO NOT make the person look like:
+
+- a baby
+- a toddler
+- a young child
+- a childlike chibi
+- a baby-faced doll
+
+Do not make the cheeks excessively round.
+
+Do not shorten the lower face excessively.
+
+Do not remove the natural jawline.
+
+Do not make the chin tiny.
+
+Do not make the nose unusually small.
+
+============================================================
+EYES
+============================================================
+
+Keep the person's natural eye shape recognizable.
+
+Do NOT dramatically enlarge the eyes.
+
+Do NOT create huge round anime eyes.
+
+Do NOT create doll-like eyes.
+
+Do NOT change the natural spacing between the eyes.
+
+Preserve the relationship between the eyes, eyebrows,
+nose and mouth.
+
+============================================================
+HAIR
+============================================================
+
+Preserve the hairstyle shown in the reference photograph.
+
+Preserve:
+
+- haircut
+- hairline
+- hair length
+- fringe
+- swept direction
+- side shape
+- top volume
+- texture
+- visible colour distribution
+- dark/light areas
+
+Do NOT redesign the hairstyle.
+
+Do NOT replace it with a different fashionable hairstyle.
+
+If the original photograph slightly crops the highest part of
+the hairstyle, naturally reconstruct the expected continuation
+of the SAME hairstyle.
+
+Do NOT reproduce the accidental crop.
+
+============================================================
+CLOTHING AND ACCESSORIES
+============================================================
+
+Preserve the clothing type and main colours visible in the
+reference photograph.
+
+Preserve clearly visible accessories when appropriate.
+
+Do not invent a completely different outfit.
+
+Do not add unrelated accessories.
+
+============================================================
+NATURAL PRESENTATION
+============================================================
+
+Preserve the person's visible gender presentation exactly as
+shown in the reference photograph.
+
+Preserve the person's natural skin tone.
+
+Do NOT add cosmetic styling that is not clearly present in the
+reference photograph.
+
+Do NOT add:
+
+- lipstick
+- eyeliner
+- eyeshadow
+- prominent artificial eyelashes
+- heavy cosmetic blush
+- beauty makeup
+
+Natural subtle skin colour variation is acceptable.
+
+Do not create pink cosmetic cheeks.
+
+============================================================
+EXPRESSION
+============================================================
+
+Preserve the person's natural personality and facial character.
+
+Use a natural, pleasant expression suitable for a premium
+profile avatar.
+
+A subtle friendly expression is acceptable.
+
+Do not dramatically alter the mouth shape.
+
+Do not create an exaggerated cartoon expression.
+
+============================================================
+CRITICAL COMPOSITION RULE
+============================================================
+
+NOTHING IMPORTANT MAY BE CROPPED.
+
+ZOOM OUT WHEN NECESSARY.
+
+The entire hairstyle MUST be visible.
+
+The highest point of the hair MUST be completely inside
+the square canvas.
+
+Leave approximately 10 to 15 percent clean background space
+ABOVE the highest point of the hairstyle.
+
+Leave comfortable background space on BOTH sides of the head
+and hairstyle.
+
+Keep the following comfortably inside the canvas:
+
+- complete hairstyle
+- complete top of head
+- both sides of the hair
+- ears where naturally visible
+- complete face
+- chin
+- neck
+- shoulders
+- upper chest
+
+Nothing important should touch the edge of the image.
+
+Do NOT crop:
+
+- hair
+- top of head
+- sides of hairstyle
+- ears
+- chin
+- shoulders
+
+Frame approximately from the upper chest upward.
+
+Make the person smaller within the canvas if necessary.
+
+CENTER the person horizontally.
+
+The final composition must feel spacious and intentionally
+framed rather than tightly zoomed.
+
+============================================================
+ILLUSTRATION STYLE
+============================================================
+
+Transform the photograph into a polished premium digital
+illustration.
+
+Use:
+
+- clean smooth digital rendering
+- refined facial detail
+- natural facial proportions
+- subtle attractive illustration stylization
+- professional avatar quality
+- soft controlled shading
+- clean edges
+- premium modern character artwork
+
+The style may have a gentle anime-inspired finish,
+but REAL-PERSON IDENTITY must remain substantially stronger
+than anime stylization.
+
+This is an IDENTITY MASTER.
+
+It should be only mildly stylized.
+
+Do NOT apply Q-character proportions yet.
+
+Do NOT enlarge the head substantially.
+
+Do NOT shrink the body substantially.
+
+Do NOT make the person look like a toy.
+
+Do NOT make the person look like a doll.
+
+Do NOT make the person look like a baby.
+
+============================================================
+BACKGROUND
+============================================================
+
+Use a simple clean neutral background.
+
+The background should not distract from the person.
+
+Do not add text.
+
+Do not add a watermark.
+
+Do not add logos that were not present in the original image.
+
+Do not add another person.
+
+Do not create multiple versions.
+
+Do not create a collage.
+
+Do not create a character sheet.
+
+============================================================
+FINAL PRIORITY ORDER
+============================================================
+
+1. SAME PERSON / FACIAL IDENTITY
+2. ADULT APPEARANCE
+3. SAME HAIRSTYLE
+4. COMPLETE HEAD AND HAIR INSIDE FRAME
+5. SAME CLOTHING / ACCESSORIES
+6. NATURAL PRESENTATION
+7. PREMIUM ILLUSTRATION QUALITY
+
+When there is any conflict between making the portrait more
+stylized and preserving identity, ALWAYS choose preserving
+identity.
+
+Generate exactly ONE centered square illustrated adult portrait.
+
+`;
+
+
+      // ============================================================
+      // FAL GPT-IMAGE 1.5 EDIT REQUEST
+      // ============================================================
 
       const falBody = {
 
-        prompt:
-
-          "Transform the supplied photograph into ONE premium cute " +
-          "STAGYLIGHT Q-version illustration of the SAME PERSON. " +
-
-          "This is an identity-preserving IMAGE EDIT. Do not redesign " +
-          "or replace the person's face. " +
-
-
-          // ======================================
-          // IDENTITY
-          // ======================================
-
-          "FACIAL IDENTITY IS THE HIGHEST PRIORITY. " +
-
-          "The finished character must be immediately recognizable as " +
-          "the same real person shown in the supplied photograph. " +
-
-          "Preserve the person's distinctive facial geometry and " +
-          "individual appearance. Keep the same face shape, forehead " +
-          "proportions, cheek proportions, jawline, chin, eyebrow shape, " +
-          "eyebrow position, natural eye shape, eye spacing, nose shape, " +
-          "nose proportions, mouth shape, lip proportions and overall " +
-          "facial balance. " +
-
-          "Do not replace these individual features with generic cute " +
-          "character features. The illustrated face should resemble an " +
-          "illustrated miniature of this exact real person. " +
-
-
-          // ======================================
-          // EYES
-          // ======================================
-
-          "Keep the person's natural eye shape clearly recognizable. " +
-
-          "The eyes may be only mildly enlarged for Q-character styling. " +
-          "Do not create huge, extremely round or generic anime eyes. " +
-
-          "Preserve the original relationship between the eyes, eyebrows, " +
-          "nose and mouth. " +
-
-
-          // ======================================
-          // HAIR
-          // ======================================
-
-          "Preserve the exact hairstyle shown in the reference photograph, " +
-          "including haircut, hair length, hairline, fringe, side shape, " +
-          "hair direction, volume and hair colour. " +
-
-          "Do not redesign, shorten, lengthen or replace the hairstyle. " +
-
-
-          // ======================================
-          // VERY IMPORTANT FRAMING
-          // ======================================
-
-          "COMPOSITION AND FRAMING ARE VERY IMPORTANT. " +
-
-          "SHOW THE ENTIRE HEAD AND THE COMPLETE HAIRSTYLE INSIDE THE IMAGE. " +
-
-          "There must be comfortable visible background space ABOVE the " +
-          "highest point of the person's hair. " +
-
-          "Do NOT crop the top of the hair. " +
-          "Do NOT crop either side of the hairstyle. " +
-          "Do NOT crop the ears. " +
-          "Do NOT crop the chin. " +
-
-          "Frame the person approximately from the upper chest upward. " +
-
-          "Make the character slightly smaller within the square canvas " +
-          "if necessary so the complete head, hairstyle, ears, neck and " +
-          "upper shoulders remain comfortably inside the image. " +
-
-          "Center the character horizontally. " +
-
-          "Leave approximately 10 percent clean background margin above " +
-          "the complete hairstyle. " +
-
-
-          // ======================================
-          // GENDER / SKIN / CLOTHING
-          // ======================================
-
-          "Preserve the person's visible gender presentation exactly as " +
-          "shown in the reference photograph. " +
-
-          "Preserve the person's natural skin tone. " +
-
-          "Do not add makeup, lipstick, eyeliner, eyeshadow, prominent " +
-          "eyelashes or cosmetic styling unless clearly visible in the " +
-          "reference photograph. " +
-
-          "Preserve the clothing type, design and main colours visible " +
-          "in the original photograph. Do not invent a different outfit. " +
-
-
-          // ======================================
-          // EXPRESSION
-          // ======================================
-
-          "Give the person a warm, happy, friendly and natural expression. " +
-
-          "Use a gentle pleasant smile while keeping the person's natural " +
-          "mouth shape and facial identity recognizable. " +
-
-
-          // ======================================
-          // Q STYLE
-          // ======================================
-
-          "Apply a polished premium Q-character illustration style. " +
-
-          "Use a moderately larger head and slightly smaller upper body, " +
-          "but do not distort the facial proportions so strongly that the " +
-          "person becomes difficult to recognize. " +
-
-          "Use clean smooth digital illustration, attractive soft rendering " +
-          "and a modern cute character finish. " +
-
-          "Identity accuracy is substantially more important than maximum " +
-          "cartoon exaggeration. " +
-
-          "The desired balance is approximately 80 percent recognizable " +
-          "real-person identity and 20 percent cute Q-character stylization. " +
-
-
-          // ======================================
-          // DO NOT
-          // ======================================
-
-          "Do not create a generic anime face. " +
-          "Do not create a generic chibi face. " +
-          "Do not create a generic doll face. " +
-          "Do not dramatically enlarge the eyes. " +
-          "Do not change the person's ethnicity or skin tone. " +
-          "Do not change gender presentation. " +
-          "Do not change hairstyle or hair colour. " +
-          "Do not change clothing. " +
-          "Do not crop the hairstyle. " +
-          "Do not crop the top of the head. " +
-          "Do not zoom excessively close to the face. " +
-          "Do not add unrelated accessories. " +
-          "Do not add another person. " +
-          "Do not create multiple versions. " +
-          "Do not create a collage. " +
-          "Do not create a character sheet. " +
-          "Do not add text or watermark. " +
-
-          "Generate exactly ONE centered Q-character portrait on a " +
-          "simple clean background.",
-
-
-        // ========================================
-        // REFERENCE PHOTO
-        // ========================================
+        prompt: identityPrompt,
 
         image_urls: [
           body.image_url
         ],
 
-
-        // ========================================
-        // HIGH IDENTITY / INPUT PRESERVATION
-        // ========================================
-
         input_fidelity: "high",
-
-
-        // ========================================
-        // OUTPUT
-        // ========================================
 
         image_size: "1024x1024",
 
@@ -284,9 +443,9 @@ export default {
       };
 
 
-      // ==========================================
-      // SEND TO GPT-IMAGE 1.5 EDIT
-      // ==========================================
+      // ============================================================
+      // SUBMIT STAGE-1 JOB TO FAL
+      // ============================================================
 
       const response = await fetch(
         "https://queue.fal.run/fal-ai/gpt-image-1.5/edit",
@@ -303,9 +462,12 @@ export default {
       );
 
 
-      const data =
-        await response.text();
+      const data = await response.text();
 
+
+      // ============================================================
+      // RETURN FAL QUEUE RESPONSE TO EXISTING ANDROID FLOW
+      // ============================================================
 
       return new Response(
         data,
@@ -324,6 +486,10 @@ export default {
 
 
     } catch (error) {
+
+      // ============================================================
+      // ERROR HANDLING
+      // ============================================================
 
       return new Response(
         JSON.stringify({
