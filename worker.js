@@ -19,10 +19,6 @@ export default {
     try {
       const body = await request.json();
 
-      // =========================================================
-      // DURABLE OBJECT ROUTES
-      // =========================================================
-
       if (body.action === "job_test") {
         return forward(
           await controller(env, "stagylight-main-ai-controller").fetch(
@@ -78,10 +74,6 @@ export default {
         );
       }
 
-      // =========================================================
-      // LEGACY STATUS / RESULT PROXY
-      // =========================================================
-
       if (body.action === "status" && body.url) {
         const r = await fetch(body.url, {
           headers: {
@@ -99,10 +91,6 @@ export default {
           }
         });
       }
-
-      // =========================================================
-      // LEGACY SINGLE-STAGE ROUTE
-      // =========================================================
 
       if (!body.image_url) {
         return json(
@@ -157,10 +145,6 @@ export class AIJobController {
   async fetch(request) {
     try {
       const body = await request.json();
-
-      // =========================================================
-      // TEST
-      // =========================================================
 
       if (body.action === "job_test") {
         return controllerJson({
@@ -267,7 +251,6 @@ export class AIJobController {
           );
         }
 
-        // Prevent duplicate paid calls.
         if (job.stage_1_status !== "not_started") {
           return controllerJson({
             ok: true,
@@ -310,6 +293,7 @@ export class AIJobController {
         }
 
         job.stage_1_status = "submitted";
+
         job.stage_1_request_id =
           result.data.request_id || null;
 
@@ -331,7 +315,7 @@ export class AIJobController {
       }
 
       // =========================================================
-      // ADVANCE TWO-STAGE JOB
+      // ADVANCE JOB
       // =========================================================
 
       if (body.action === "advance_job") {
@@ -384,6 +368,7 @@ export class AIJobController {
 
           if (check.state === "processing") {
             job.stage_1_status = "processing";
+
             await saveJob(this.ctx, job);
 
             return controllerJson({
@@ -768,7 +753,6 @@ async function checkFal(
 
 // ===============================================================
 // STAGE 1 — HUMAN PHOTO -> IDENTITY MASTER
-// KEEP REAL IDENTITY STRONG
 // ===============================================================
 
 function getIdentityPrompt() {
@@ -859,146 +843,140 @@ Generate exactly ONE square portrait.
 
 
 // ===============================================================
-// STAGE 2 — IDENTITY MASTER -> FINAL Q MASTER
-//
-// NEW VERSION:
-// FACE = VERY LIGHT STYLIZATION
-// Q EFFECT = MAINLY HEAD/BODY + ART STYLE
+// STAGE 2 — IDENTITY MASTER -> FINAL ADULT Q MASTER
+// FACE PRESERVATION VERSION
 // ===============================================================
 
 function getQMasterPrompt() {
   return `
-Create ONE premium STAGYLIGHT ADULT Q CHARACTER by transforming
-the SUPPLIED IDENTITY MASTER ITSELF.
+Transform the supplied STAGYLIGHT IDENTITY MASTER into ONE
+premium ADULT Q CHARACTER of the EXACT SAME PERSON.
 
-CRITICAL RULE:
+ABSOLUTE PRIORITY:
+PRESERVE THE FACE.
 
-THIS IS THE SAME PERSON.
+The supplied Identity Master already contains the correct face.
 
-Do NOT invent a new face.
-Do NOT reinterpret the person's identity.
-Do NOT replace the face with a generic chibi/anime face.
+DO NOT redesign, reinterpret, beautify, simplify or reconstruct
+the face into a typical chibi or anime face.
 
-The supplied Identity Master already contains the correct facial
-identity. Treat its face as LOCKED REFERENCE GEOMETRY.
-
-TARGET:
-
-Approximately 90 percent recognizable personal identity.
-Approximately 10 percent facial Q stylization.
-
-Most of the cute Q feeling must come from:
-
-- slightly larger head-to-body ratio
-- smaller upper body
-- polished illustration rendering
-- friendly expression
-- clean avatar/sticker presentation
-
-NOT from changing the person's face.
+The final character must be unmistakably the SAME ADULT PERSON.
 
 ============================================================
-FACE GEOMETRY LOCK — HIGHEST PRIORITY
+FACE — ALMOST NO GEOMETRIC CHANGE
 ============================================================
 
-Keep extremely close to the supplied Identity Master:
+Keep the face extremely close to the supplied Identity Master.
 
-- exact overall face shape
-- face length
-- face width
-- forehead height
+Preserve:
+
+- exact face length-to-width ratio
+- forehead height and width
 - cheek width
-- cheekbone placement
-- jaw width
-- jaw angle
-- chin length and shape
-- eyebrow shape and position
-- eye shape
+- cheekbone position
+- jawline and jaw angle
+- chin length, width and shape
+- eyebrow shape, thickness and position
+- exact natural eye shape
+- exact eye opening
 - eye size
+- iris size relative to the eye
 - eye spacing
-- eyelid structure
+- eyelids
+- eyebrow-to-eye distance
 - nose bridge
 - nose length
-- nose width
-- nostril proportions
+- nose tip
+- nostril width
 - mouth width
 - mouth shape
-- lip proportions
-- distance between nose and mouth
+- cupid's bow
+- lip thickness
+- nose-to-mouth distance
 - lower-face length
-- natural facial asymmetry where visible
 - skin tone
+- distinctive facial characteristics
 - adult age appearance
 - visible gender presentation
 
-The viewer should recognize the SAME PERSON from the face alone.
+DO NOT round or widen the face.
 
-DO NOT simplify the face into standard chibi geometry.
+DO NOT shorten the lower face.
 
-============================================================
-EYES — DO NOT ANIME-ENLARGE
-============================================================
+DO NOT enlarge the forehead.
 
-Keep the eyes close to their ORIGINAL size and shape.
+DO NOT shrink the nose or chin.
 
-Only a VERY SMALL increase in expressiveness is allowed.
+DO NOT smooth away distinctive facial features.
 
-Do NOT create:
-
-- giant round eyes
-- oversized anime eyes
-- doll eyes
-- sparkling childlike eyes
-- heavily widened eyes
-- thick cosmetic eyelashes
-
-Natural recognizable eye identity is more important than cuteness.
+The FACE itself should receive MINIMAL Q distortion.
 
 ============================================================
-NO BABY-FACE TRANSFORMATION
+EYES — STRICT LOCK
 ============================================================
 
-The character MUST remain clearly ADULT.
+DO NOT enlarge the eyes.
 
-Do NOT:
+DO NOT widen the eyes.
 
-- shorten the face dramatically
-- inflate the cheeks
-- make the jaw extremely round
-- shrink the nose
-- shrink the chin
-- enlarge the forehead excessively
-- make toddler proportions
-- create a baby-faced chibi
-- create a doll face
+DO NOT make the eyes rounder.
 
-Keep the person's mature lower-face structure.
+DO NOT create anime eyes, doll eyes or childlike eyes.
+
+Keep the same natural eye shape, size, eyelid opening,
+iris proportion and spacing as the Identity Master.
+
+Expression may change slightly without changing eye anatomy.
 
 ============================================================
-Q PROPORTIONS
+ADULT — STRICT LOCK
 ============================================================
 
-Create controlled Q proportions WITHOUT rebuilding the face.
+The character MUST clearly remain an adult.
 
-The head may be approximately 15 to 20 percent larger relative
-to the upper body.
+NO baby face.
+NO toddler appearance.
+NO child appearance.
+NO baby-faced chibi.
+NO inflated cheeks.
+NO tiny nose.
+NO tiny chin.
+NO extremely round head.
+NO youthful doll face.
 
-Reduce the upper-body proportion moderately.
+Do not make the person appear substantially younger.
 
-Do NOT make the head enormous.
+============================================================
+WHERE THE Q STYLE SHOULD COME FROM
+============================================================
 
-Do NOT use extreme super-deformed chibi proportions.
+Create the Q-character feeling primarily through:
 
-The result should feel like a premium adult Q avatar,
-not a children's cartoon character.
+- polished cute illustration rendering
+- slightly larger HEAD relative to the BODY
+- moderately compact shoulders and upper body
+- clean Q-avatar silhouette
+- friendly expression
+- premium sticker-like presentation
+
+IMPORTANT:
+
+Do NOT enlarge individual facial features to create cuteness.
+
+Do NOT substantially change facial geometry.
+
+The head-to-body relationship may change,
+but the FACE INSIDE THE HEAD stays recognizable and mature.
+
+Use only mild Q proportions.
+
+Avoid extreme super-deformed chibi proportions.
 
 ============================================================
 HAIR — IDENTITY LOCK
 ============================================================
 
-Preserve the hairstyle from the Identity Master.
-
-Keep:
+Preserve the SAME hairstyle:
 
 - hairline
 - haircut
@@ -1007,99 +985,99 @@ Keep:
 - top volume
 - side shape
 - texture
-- hair length
-- light/dark colour distribution
+- length
+- colour distribution
+- dark/light areas
 
-Do NOT replace the hairstyle with generic cartoon hair.
+Do NOT redesign the hair.
 
-The complete hairstyle must remain inside the image.
+If necessary, reconstruct the natural continuation of the
+same hairstyle so the complete hair is visible.
 
 ============================================================
-CLOTHING + ACCESSORIES
+CLOTHING AND ACCESSORIES
 ============================================================
 
-Keep the same recognizable clothing and visible accessories
+Preserve the same clothing, main colours and visible accessories
 from the Identity Master.
 
 Do NOT redesign the outfit.
 
 ============================================================
-NO UNWANTED COSMETICS
+NO MAKEUP
 ============================================================
 
 Do NOT add:
 
-- blush
+- cosmetic blush
 - pink cheeks
 - lipstick
 - eyeliner
 - eyeshadow
+- artificial eyelashes
 - beauty makeup
-- prominent artificial eyelashes
 
-Cute appearance must come from expression, proportions and
-illustration quality — NEVER cosmetic feminization.
+Cuteness must NOT come from cosmetics.
 
 ============================================================
 EXPRESSION
 ============================================================
 
-Use a pleasant, confident, friendly ADULT expression.
+Use a pleasant, friendly and confident adult expression.
 
-A mild natural smile is suitable.
+A small natural smile is suitable.
 
-Keep the person's recognizable mouth shape.
-
-Do NOT create an exaggerated open-mouth cartoon expression.
+Keep the person's recognizable mouth structure.
 
 ============================================================
-ART STYLE
+STYLE
 ============================================================
 
-Use premium polished digital Q-character artwork.
+Premium modern STAGYLIGHT Q illustration.
 
-Clean edges.
-Smooth controlled shading.
+Cute but mature.
+Identity-first.
+Clean digital artwork.
 Refined facial detail.
+Smooth controlled shading.
 Professional avatar/sticker quality.
 
-The face should retain MORE realistic structural detail than
-a normal chibi character.
+The FACE should be more structurally realistic than a normal
+chibi character.
 
-Do NOT make it photorealistic.
+The BODY may be more Q-stylized than the face.
 
+Do NOT make the final image photorealistic.
 Do NOT make it generic anime.
-
 Do NOT make it childish.
 
 ============================================================
 COMPOSITION
 ============================================================
 
-Show completely:
+Show:
 
-- full hairstyle
-- highest point of hair
+- entire hairstyle
 - full head
-- face
+- complete face
 - chin
 - neck
 - shoulders
 - upper body
 
 Leave approximately 10 to 15 percent clean background above
-the highest point of the hair.
+the highest point of the hairstyle.
 
-Nothing important may touch the canvas edge.
+Nothing important may touch or leave the canvas.
 
-Zoom out if necessary.
+Zoom out when necessary.
 
-Use a clean neutral background.
+Center the character on a simple clean neutral background.
 
 No text.
 No watermark.
 No logo.
-No additional people.
+No extra person.
 No collage.
 No multiple versions.
 
@@ -1107,22 +1085,23 @@ No multiple versions.
 FINAL PRIORITY
 ============================================================
 
-1. SAME RECOGNIZABLE FACE
-2. SAME ADULT PERSON
-3. ORIGINAL EYE / NOSE / MOUTH / JAW GEOMETRY
-4. SAME HAIRSTYLE
-5. CONTROLLED ADULT Q PROPORTIONS
-6. SAME CLOTHING AND ACCESSORIES
-7. NO BLUSH OR UNWANTED MAKEUP
-8. FULL HAIR INSIDE FRAME
-9. PREMIUM STAGYLIGHT QUALITY
+1. SAME FACE AS THE IDENTITY MASTER
+2. SAME RECOGNIZABLE ADULT PERSON
+3. NATURAL ORIGINAL EYES
+4. ORIGINAL FACE LENGTH / JAW / CHIN
+5. ORIGINAL NOSE AND MOUTH
+6. SAME HAIRSTYLE
+7. MILD Q HEAD-TO-BODY PROPORTIONS
+8. SAME CLOTHING / ACCESSORIES
+9. NO MAKEUP OR BLUSH
+10. PREMIUM STAGYLIGHT QUALITY
 
-If Q stylization conflicts with facial identity,
-FACIAL IDENTITY MUST WIN.
+IF CUTENESS CONFLICTS WITH IDENTITY:
+IDENTITY MUST WIN.
 
-Do not invent a Q character.
+DO NOT CREATE A NEW CHIBI FACE.
 
-Stylize the supplied Identity Master itself.
+KEEP THE EXISTING FACE AND Q-STYLIZE THE CHARACTER AROUND IT.
 
 Generate exactly ONE square Adult Q Master.
 `;
