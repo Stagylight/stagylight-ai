@@ -86,76 +86,192 @@ export default {
       // STAGYLIGHT MY Q
       //
       // TARGET:
-      // 80% RECOGNIZABLE IDENTITY
-      // 20% CUTE Q STYLIZATION
+      // ~80% RECOGNIZABLE IDENTITY
+      // ~20% CUTE Q STYLIZATION
+      //
+      // IMPORTANT:
+      // FULL HEAD + FULL HAIRSTYLE IN FRAME
       // ==========================================
 
       const falBody = {
 
         prompt:
-          "Transform the supplied photograph into ONE cute STAGYLIGHT " +
-          "Q-version illustration of the SAME PERSON. " +
 
-          "This is an IMAGE EDIT, not a redesign of the person. " +
+          "Transform the supplied photograph into ONE premium cute " +
+          "STAGYLIGHT Q-version illustration of the SAME PERSON. " +
 
-          "HIGHEST PRIORITY: preserve the person's identity and facial " +
-          "likeness. The result must be immediately recognizable as the " +
-          "same person from the reference photograph. " +
-
-          "Keep the person's actual facial structure: same face shape, " +
-          "forehead, jawline, cheeks, eyebrows, eye shape and spacing, " +
-          "nose shape, mouth shape, lips, skin tone and distinctive " +
-          "facial proportions. " +
-
-          "Do not substitute a generic anime, chibi or doll face. " +
-
-          "Keep the eyes close to their real natural shape and size. " +
-          "Only slightly enlarge them if necessary for the Q style. " +
-          "Do not create huge round anime eyes. " +
-
-          "Preserve the exact hairstyle, haircut, hair length, hairline, " +
-          "hair direction and hair colour visible in the photograph. " +
-
-          "Preserve the person's visible gender presentation. " +
-
-          "Do not add makeup, lipstick, eyeliner, eyeshadow or prominent " +
-          "eyelashes unless those features already exist in the reference. " +
-
-          "Preserve the same clothing design, clothing type and main " +
-          "colours visible in the original photograph. " +
-
-          "Give the person a warm, happy and friendly natural expression. " +
-
-          "Apply a cute premium Q-character illustration style with a " +
-          "moderately larger head and slightly smaller body. " +
-
-          "Keep realistic recognizable facial features inside the " +
-          "illustrated Q style. Identity is much more important than " +
-          "exaggerated cartoon styling. " +
-
-          "The desired visual balance is approximately 80 percent " +
-          "recognizable real-person identity and 20 percent Q-character " +
-          "stylization. " +
-
-          "Generate exactly ONE person only. No second person. " +
-          "No collage. No character sheet. No multiple poses. " +
-          "No text. No watermark. " +
-
-          "Use a simple clean background.",
+          "This is an identity-preserving IMAGE EDIT. Do not redesign " +
+          "or replace the person's face. " +
 
 
-        // GPT Image Edit expects an ARRAY of reference images
+          // ======================================
+          // IDENTITY
+          // ======================================
+
+          "FACIAL IDENTITY IS THE HIGHEST PRIORITY. " +
+
+          "The finished character must be immediately recognizable as " +
+          "the same real person shown in the supplied photograph. " +
+
+          "Preserve the person's distinctive facial geometry and " +
+          "individual appearance. Keep the same face shape, forehead " +
+          "proportions, cheek proportions, jawline, chin, eyebrow shape, " +
+          "eyebrow position, natural eye shape, eye spacing, nose shape, " +
+          "nose proportions, mouth shape, lip proportions and overall " +
+          "facial balance. " +
+
+          "Do not replace these individual features with generic cute " +
+          "character features. The illustrated face should resemble an " +
+          "illustrated miniature of this exact real person. " +
+
+
+          // ======================================
+          // EYES
+          // ======================================
+
+          "Keep the person's natural eye shape clearly recognizable. " +
+
+          "The eyes may be only mildly enlarged for Q-character styling. " +
+          "Do not create huge, extremely round or generic anime eyes. " +
+
+          "Preserve the original relationship between the eyes, eyebrows, " +
+          "nose and mouth. " +
+
+
+          // ======================================
+          // HAIR
+          // ======================================
+
+          "Preserve the exact hairstyle shown in the reference photograph, " +
+          "including haircut, hair length, hairline, fringe, side shape, " +
+          "hair direction, volume and hair colour. " +
+
+          "Do not redesign, shorten, lengthen or replace the hairstyle. " +
+
+
+          // ======================================
+          // VERY IMPORTANT FRAMING
+          // ======================================
+
+          "COMPOSITION AND FRAMING ARE VERY IMPORTANT. " +
+
+          "SHOW THE ENTIRE HEAD AND THE COMPLETE HAIRSTYLE INSIDE THE IMAGE. " +
+
+          "There must be comfortable visible background space ABOVE the " +
+          "highest point of the person's hair. " +
+
+          "Do NOT crop the top of the hair. " +
+          "Do NOT crop either side of the hairstyle. " +
+          "Do NOT crop the ears. " +
+          "Do NOT crop the chin. " +
+
+          "Frame the person approximately from the upper chest upward. " +
+
+          "Make the character slightly smaller within the square canvas " +
+          "if necessary so the complete head, hairstyle, ears, neck and " +
+          "upper shoulders remain comfortably inside the image. " +
+
+          "Center the character horizontally. " +
+
+          "Leave approximately 10 percent clean background margin above " +
+          "the complete hairstyle. " +
+
+
+          // ======================================
+          // GENDER / SKIN / CLOTHING
+          // ======================================
+
+          "Preserve the person's visible gender presentation exactly as " +
+          "shown in the reference photograph. " +
+
+          "Preserve the person's natural skin tone. " +
+
+          "Do not add makeup, lipstick, eyeliner, eyeshadow, prominent " +
+          "eyelashes or cosmetic styling unless clearly visible in the " +
+          "reference photograph. " +
+
+          "Preserve the clothing type, design and main colours visible " +
+          "in the original photograph. Do not invent a different outfit. " +
+
+
+          // ======================================
+          // EXPRESSION
+          // ======================================
+
+          "Give the person a warm, happy, friendly and natural expression. " +
+
+          "Use a gentle pleasant smile while keeping the person's natural " +
+          "mouth shape and facial identity recognizable. " +
+
+
+          // ======================================
+          // Q STYLE
+          // ======================================
+
+          "Apply a polished premium Q-character illustration style. " +
+
+          "Use a moderately larger head and slightly smaller upper body, " +
+          "but do not distort the facial proportions so strongly that the " +
+          "person becomes difficult to recognize. " +
+
+          "Use clean smooth digital illustration, attractive soft rendering " +
+          "and a modern cute character finish. " +
+
+          "Identity accuracy is substantially more important than maximum " +
+          "cartoon exaggeration. " +
+
+          "The desired balance is approximately 80 percent recognizable " +
+          "real-person identity and 20 percent cute Q-character stylization. " +
+
+
+          // ======================================
+          // DO NOT
+          // ======================================
+
+          "Do not create a generic anime face. " +
+          "Do not create a generic chibi face. " +
+          "Do not create a generic doll face. " +
+          "Do not dramatically enlarge the eyes. " +
+          "Do not change the person's ethnicity or skin tone. " +
+          "Do not change gender presentation. " +
+          "Do not change hairstyle or hair colour. " +
+          "Do not change clothing. " +
+          "Do not crop the hairstyle. " +
+          "Do not crop the top of the head. " +
+          "Do not zoom excessively close to the face. " +
+          "Do not add unrelated accessories. " +
+          "Do not add another person. " +
+          "Do not create multiple versions. " +
+          "Do not create a collage. " +
+          "Do not create a character sheet. " +
+          "Do not add text or watermark. " +
+
+          "Generate exactly ONE centered Q-character portrait on a " +
+          "simple clean background.",
+
+
+        // ========================================
+        // REFERENCE PHOTO
+        // ========================================
+
         image_urls: [
           body.image_url
         ],
 
-        // Maximum reference-image preservation option
+
+        // ========================================
+        // HIGH IDENTITY / INPUT PRESERVATION
+        // ========================================
+
         input_fidelity: "high",
 
-        // Square STAGYLIGHT My Q image
+
+        // ========================================
+        // OUTPUT
+        // ========================================
+
         image_size: "1024x1024",
 
-        // Highest available generation quality
         quality: "high",
 
         background: "opaque",
@@ -164,7 +280,6 @@ export default {
 
         output_format: "png",
 
-        // Keep queue/result URL behaviour
         sync_mode: false
       };
 
