@@ -63,44 +63,43 @@ export default {
 
       const falBody = {
         prompt:
-          "Edit the supplied photograph into ONE mildly stylized Q-version " +
-          "portrait of the EXACT SAME PERSON. FACIAL LIKENESS AND IDENTITY " +
-          "ARE THE HIGHEST PRIORITY. The finished portrait must remain " +
-          "immediately recognizable as the person in the source photograph. " +
+          "Transform the supplied photograph into ONE cute, friendly and polished " +
+          "Q-version character of the SAME PERSON. The character must remain clearly " +
+          "recognizable as the person in the reference photograph while having a warm, " +
+          "appealing Q-character illustration style. " +
 
-          "Do not invent, redesign, beautify or replace the face. Preserve " +
-          "the person's distinctive face shape, jawline, cheek proportions, " +
-          "forehead proportions, eyebrow shape and position, natural eye " +
-          "shape and spacing, nose shape and proportions, mouth shape, lip " +
-          "proportions and overall facial geometry from the source photograph. " +
+          "Preserve the person's recognizable face shape, eyebrows, natural eye shape " +
+          "and spacing, nose, mouth, skin tone and important facial characteristics. " +
+          "Keep enough facial likeness that friends of the person could recognize them. " +
 
-          "Keep the eyes close to their original natural shape and relative " +
-          "size. Do NOT create huge anime eyes. Do NOT add prominent eyelashes, " +
-          "eyeliner, eyeshadow, lipstick, makeup, cosmetic blush or feminine " +
-          "beautification that is not present in the source photograph. " +
+          "Give the character a warm, cheerful and approachable expression with a gentle " +
+          "natural smile. The character should look happy, lively and friendly, never " +
+          "blank, emotionless, uncanny, creepy, stiff or frightening. " +
 
-          "Preserve the person's visible gender presentation exactly as shown " +
-          "in the source image. Do not feminize or masculinize the subject. " +
+          "Use cute Q-version proportions with a moderately larger head, compact smaller " +
+          "body and softly simplified facial features. Make the cheeks slightly softer " +
+          "and the overall illustration charming, youthful and expressive while still " +
+          "preserving the person's recognizable identity. " +
 
-          "Preserve the exact hairstyle, hair length, haircut, hair direction " +
-          "and hair colour visible in the source photograph. Do not lengthen " +
-          "the hair or redesign the hairstyle. " +
+          "Keep the eyes lively and friendly but reasonably proportional to the person's " +
+          "real eye shape. Do not use extremely large anime eyes. Do not add exaggerated " +
+          "eyelashes, eyeliner, eyeshadow, lipstick, heavy makeup or cosmetic features " +
+          "that are not visible in the reference photograph. " +
 
-          "Preserve the same clothing type, design and main colours visible " +
-          "in the source photograph. " +
+          "Preserve the person's visible gender presentation exactly as shown. Do not " +
+          "feminize or masculinize the subject. " +
 
-          "Apply only MODERATE Q-version stylization. Use a slightly larger " +
-          "head and slightly simplified illustrated features, but keep the " +
-          "person's unique facial proportions and identity. The result should " +
-          "look like a recognizable illustrated miniature of the real person, " +
-          "not a generic anime character. " +
+          "Preserve the hairstyle, hair length, haircut, hair direction and hair colour " +
+          "shown in the reference photograph. Do not invent longer hair or a different hairstyle. " +
 
-          "Cuteness is SECONDARY to facial likeness. If stronger chibi " +
-          "stylization would reduce recognition, preserve the realistic " +
-          "facial features instead. " +
+          "Preserve the clothing type, design and main colours shown in the reference photograph. " +
 
-          "Generate exactly ONE person, ONE pose and ONE portrait. Do not " +
-          "generate a collage, character sheet, multiple versions or multiple people. " +
+          "Use smooth clean illustration lines, soft natural facial shading and a polished " +
+          "premium sticker-character appearance. Avoid harsh facial shadows, rigid facial " +
+          "features, expressionless staring or an overly realistic uncanny appearance. " +
+
+          "Generate exactly ONE character, ONE pose and ONE portrait. Do not create a " +
+          "collage, character sheet, multiple versions or multiple people. " +
 
           "Use a simple clean background.",
 
