@@ -72,7 +72,7 @@ export default {
 
         guidance_scale: 4,
 
-        id_weight: 1.0, 
+        id_weight: 1.25, 
 
         true_cfg: 1,
 
