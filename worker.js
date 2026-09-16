@@ -507,3 +507,23 @@ Generate exactly ONE centered square illustrated adult portrait.
     }
   }
 };
+export class AIJobController {
+  constructor(ctx, env) {
+    this.ctx = ctx;
+    this.env = env;
+  }
+
+  async fetch(request) {
+    return new Response(
+      JSON.stringify({
+        ok: true,
+        message: "STAGYLIGHT AI Job Controller is ready"
+      }),
+      {
+        headers: {
+          "Content-Type": "application/json"
+        }
+      }
+    );
+  }
+}

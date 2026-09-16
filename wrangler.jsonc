@@ -2,5 +2,21 @@
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "stagylight-ai-github",
   "main": "worker.js",
-  "compatibility_date": "2026-09-15"
+  "compatibility_date": "2026-09-15",
+
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "AI_JOB_CONTROLLER",
+        "class_name": "AIJobController"
+      }
+    ]
+  },
+
+  "exports": {
+    "AIJobController": {
+      "type": "durable-object",
+      "storage": "sqlite"
+    }
+  }
 }
