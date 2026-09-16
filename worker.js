@@ -1,3 +1,23 @@
+// ================================================================
+// STAGYLIGHT AI WORKER
+//
+// TWO-STAGE MASTER Q SYSTEM
+//
+// Stage 1:
+// Human Photo -> Identity Master
+//
+// Stage 2:
+// Identity Master -> Cute Adult Q Master
+//
+// Durable Object:
+// AIJobController
+// ================================================================
+
+
+const FAL_EDIT_ENDPOINT =
+  "https://queue.fal.run/fal-ai/gpt-image-1.5/edit";
+
+
 export default {
   async fetch(request, env) {
 
@@ -6,6 +26,7 @@ export default {
       "Access-Control-Allow-Headers": "Content-Type",
       "Access-Control-Allow-Methods": "POST, OPTIONS"
     };
+
 
     // ============================================================
     // CORS
@@ -19,7 +40,7 @@ export default {
 
 
     // ============================================================
-    // SIMPLE GET TEST
+    // SIMPLE HEALTH CHECK
     // ============================================================
 
     if (request.method !== "POST") {
@@ -41,95 +62,226 @@ export default {
 
 
       // ============================================================
-      // STAGYLIGHT AI JOB CONTROLLER
+      // FREE DURABLE OBJECT TEST
       //
-      // This is the foundation for:
-      // Human Photo
-      // -> Stage 1 Identity Master
-      // -> Stage 2 Q Master
-      //
-      // For now this route only confirms that the Durable Object
-      // connection is working. Existing Android generation remains
-      // untouched below.
+      // DOES NOT CALL FAL.AI
       // ============================================================
 
       if (body.action === "job_test") {
 
-        if (!env.AI_JOB_CONTROLLER) {
-          return jsonResponse(
-            {
-              ok: false,
-              error: "AI_JOB_CONTROLLER binding is unavailable."
-            },
-            500,
-            corsHeaders
-          );
-        }
-
-        const id = env.AI_JOB_CONTROLLER.idFromName(
-          "stagylight-main-ai-controller"
+        const controller = getController(
+          env,
+          "stagylight-test-controller"
         );
 
-        const controller = env.AI_JOB_CONTROLLER.get(id);
-
-        const controllerResponse = await controller.fetch(
+        const response = await controller.fetch(
           new Request(
-            "https://stagylight.internal/job-test",
+            "https://stagylight.internal/test",
             {
               method: "POST",
               headers: {
                 "Content-Type": "application/json"
               },
               body: JSON.stringify({
-                action: "job_test"
+                action: "test"
               })
             }
           )
         );
 
-        const controllerText = await controllerResponse.text();
-
-        return new Response(
-          controllerText,
-          {
-            status: controllerResponse.status,
-            headers: {
-              ...corsHeaders,
-              "Content-Type": "application/json"
-            }
-          }
+        return proxyControllerResponse(
+          response,
+          corsHeaders
         );
       }
 
 
       // ============================================================
-      // STATUS / RESULT PROXY
+      // CREATE REAL TWO-STAGE Q JOB
       //
-      // KEEP EXISTING ANDROID POLLING WORKING
+      // WARNING:
+      // THIS STARTS STAGE 1 AND USES AN AI GENERATION.
       // ============================================================
 
-      if (body.action === "status" && body.url) {
+      if (body.action === "create_q_job") {
+
+        if (!body.image_url) {
+
+          return jsonResponse(
+            {
+              ok: false,
+              error: "No reference image received."
+            },
+            400,
+            corsHeaders
+          );
+        }
+
+
+        const jobId = crypto.randomUUID();
+
+        const controller = getController(
+          env,
+          jobId
+        );
+
+
+        const response = await controller.fetch(
+          new Request(
+            "https://stagylight.internal/create",
+            {
+              method: "POST",
+
+              headers: {
+                "Content-Type": "application/json"
+              },
+
+              body: JSON.stringify({
+                action: "create",
+                job_id: jobId,
+                image_url: body.image_url
+              })
+            }
+          )
+        );
+
+
+        return proxyControllerResponse(
+          response,
+          corsHeaders
+        );
+      }
+
+
+      // ============================================================
+      // CHECK / ADVANCE TWO-STAGE JOB
+      //
+      // Android can repeatedly call this.
+      //
+      // The Durable Object decides whether:
+      //
+      // Stage 1 is still running
+      // Stage 1 finished -> submit Stage 2
+      // Stage 2 is still running
+      // Stage 2 finished -> return final Q
+      // ============================================================
+
+      if (
+        body.action === "q_job_status" &&
+        body.job_id
+      ) {
+
+        const controller = getController(
+          env,
+          body.job_id
+        );
+
+
+        const response = await controller.fetch(
+          new Request(
+            "https://stagylight.internal/status",
+            {
+              method: "POST",
+
+              headers: {
+                "Content-Type": "application/json"
+              },
+
+              body: JSON.stringify({
+                action: "status",
+                job_id: body.job_id
+              })
+            }
+          )
+        );
+
+
+        return proxyControllerResponse(
+          response,
+          corsHeaders
+        );
+      }
+
+
+      // ============================================================
+      // GET FINAL Q RESULT
+      // ============================================================
+
+      if (
+        body.action === "q_job_result" &&
+        body.job_id
+      ) {
+
+        const controller = getController(
+          env,
+          body.job_id
+        );
+
+
+        const response = await controller.fetch(
+          new Request(
+            "https://stagylight.internal/result",
+            {
+              method: "POST",
+
+              headers: {
+                "Content-Type": "application/json"
+              },
+
+              body: JSON.stringify({
+                action: "result",
+                job_id: body.job_id
+              })
+            }
+          )
+        );
+
+
+        return proxyControllerResponse(
+          response,
+          corsHeaders
+        );
+      }
+
+
+      // ============================================================
+      // OLD STATUS / RESULT PROXY
+      //
+      // PRESERVED FOR CURRENT ANDROID CODE
+      // ============================================================
+
+      if (
+        body.action === "status" &&
+        body.url
+      ) {
 
         const statusResponse = await fetch(
           body.url,
           {
             headers: {
-              "Authorization": `Key ${env.FAL_KEY}`
+              "Authorization":
+                `Key ${env.FAL_KEY}`
             }
           }
         );
 
-        const statusData = await statusResponse.text();
+
+        const statusData =
+          await statusResponse.text();
+
 
         return new Response(
           statusData,
           {
             status: statusResponse.status,
+
             headers: {
               ...corsHeaders,
 
               "Content-Type":
-                statusResponse.headers.get("Content-Type") ||
+                statusResponse.headers.get(
+                  "Content-Type"
+                ) ||
                 "application/json"
             }
           }
@@ -138,30 +290,202 @@ export default {
 
 
       // ============================================================
-      // VALIDATE REFERENCE PHOTO
+      // LEGACY SINGLE-STAGE GENERATION
+      //
+      // PRESERVED TEMPORARILY.
+      //
+      // Existing Android generation continues to work until we
+      // deliberately switch Android to create_q_job.
       // ============================================================
 
-      if (!body.image_url) {
+      if (body.image_url) {
 
-        return jsonResponse(
+        const falBody = {
+
+          prompt: getIdentityPrompt(),
+
+          image_urls: [
+            body.image_url
+          ],
+
+          input_fidelity: "high",
+
+          image_size: "1024x1024",
+
+          quality: "high",
+
+          background: "opaque",
+
+          num_images: 1,
+
+          output_format: "png",
+
+          sync_mode: false
+        };
+
+
+        const response = await fetch(
+          FAL_EDIT_ENDPOINT,
           {
-            error: "No reference image received."
-          },
-          400,
-          corsHeaders
+            method: "POST",
+
+            headers: {
+              "Authorization":
+                `Key ${env.FAL_KEY}`,
+
+              "Content-Type":
+                "application/json"
+            },
+
+            body:
+              JSON.stringify(falBody)
+          }
+        );
+
+
+        const data =
+          await response.text();
+
+
+        return new Response(
+          data,
+          {
+            status: response.status,
+
+            headers: {
+              ...corsHeaders,
+
+              "Content-Type":
+                response.headers.get(
+                  "Content-Type"
+                ) ||
+                "application/json"
+            }
+          }
         );
       }
 
 
       // ============================================================
-      // STAGE 1
-      // HUMAN PHOTO -> IDENTITY MASTER
-      //
-      // This is NOT the final Q character.
-      // Stage 1 protects the person's identity first.
+      // UNKNOWN REQUEST
       // ============================================================
 
-      const identityPrompt = `
+      return jsonResponse(
+        {
+          ok: false,
+          error: "Unknown STAGYLIGHT AI action."
+        },
+        400,
+        corsHeaders
+      );
+
+
+    } catch (error) {
+
+      return jsonResponse(
+        {
+          ok: false,
+          error: error.message
+        },
+        500,
+        corsHeaders
+      );
+    }
+  }
+};
+
+
+// ================================================================
+// GET DURABLE OBJECT
+// ================================================================
+
+function getController(env, name) {
+
+  if (!env.AI_JOB_CONTROLLER) {
+    throw new Error(
+      "AI_JOB_CONTROLLER binding is unavailable."
+    );
+  }
+
+
+  const id =
+    env.AI_JOB_CONTROLLER.idFromName(
+      name
+    );
+
+
+  return env.AI_JOB_CONTROLLER.get(
+    id
+  );
+}
+
+
+// ================================================================
+// PROXY DURABLE OBJECT RESPONSE
+// ================================================================
+
+async function proxyControllerResponse(
+  response,
+  corsHeaders
+) {
+
+  const text =
+    await response.text();
+
+
+  return new Response(
+    text,
+    {
+      status: response.status,
+
+      headers: {
+        ...corsHeaders,
+
+        "Content-Type":
+          response.headers.get(
+            "Content-Type"
+          ) ||
+          "application/json"
+      }
+    }
+  );
+}
+
+
+// ================================================================
+// JSON RESPONSE
+// ================================================================
+
+function jsonResponse(
+  data,
+  status = 200,
+  corsHeaders = {}
+) {
+
+  return new Response(
+    JSON.stringify(data),
+    {
+      status,
+
+      headers: {
+        ...corsHeaders,
+        "Content-Type":
+          "application/json"
+      }
+    }
+  );
+}
+
+
+// ================================================================
+// STAGE 1 PROMPT
+//
+// HUMAN PHOTO -> IDENTITY MASTER
+// ================================================================
+
+function getIdentityPrompt() {
+
+  return `
 
 Create ONE premium illustrated portrait of the EXACT SAME PERSON
 shown in the supplied reference photograph.
@@ -181,7 +505,8 @@ HIGHEST PRIORITY: PRESERVE THE PERSON'S IDENTITY
 The finished portrait must be immediately recognizable as the
 same real adult person shown in the supplied photograph.
 
-Treat the supplied photograph as the authoritative identity reference.
+Treat the supplied photograph as the authoritative identity
+reference.
 
 Preserve the person's distinctive natural facial geometry.
 
@@ -210,7 +535,7 @@ Carefully preserve:
 
 Do NOT replace these features with generic anime features.
 
-Do NOT replace them with generic cartoon features.
+Do NOT replace these features with generic cartoon features.
 
 Do NOT beautify the person into a different-looking individual.
 
@@ -339,7 +664,7 @@ EXPRESSION
 
 Preserve the person's natural personality and facial character.
 
-Use a natural, pleasant expression suitable for a premium
+Use a natural pleasant expression suitable for a premium
 profile avatar.
 
 A subtle friendly expression is acceptable.
@@ -381,23 +706,11 @@ Keep the following comfortably inside the canvas:
 
 Nothing important should touch the edge of the image.
 
-Do NOT crop:
-
-- hair
-- top of head
-- sides of hairstyle
-- ears
-- chin
-- shoulders
-
 Frame approximately from the upper chest upward.
 
 Make the person smaller within the canvas if necessary.
 
 CENTER the person horizontally.
-
-The final composition must feel spacious and intentionally
-framed rather than tightly zoomed.
 
 ============================================================
 ILLUSTRATION STYLE
@@ -443,24 +756,15 @@ BACKGROUND
 
 Use a simple clean neutral background.
 
-The background should not distract from the person.
-
 Do not add text.
-
 Do not add a watermark.
-
-Do not add logos that were not present in the original image.
-
 Do not add another person.
-
 Do not create multiple versions.
-
 Do not create a collage.
-
 Do not create a character sheet.
 
 ============================================================
-FINAL PRIORITY ORDER
+FINAL PRIORITY
 ============================================================
 
 1. SAME PERSON / FACIAL IDENTITY
@@ -472,24 +776,310 @@ FINAL PRIORITY ORDER
 7. PREMIUM ILLUSTRATION QUALITY
 
 When there is any conflict between making the portrait more
-stylized and preserving identity, ALWAYS choose preserving
-identity.
+stylized and preserving identity, ALWAYS preserve identity.
 
 Generate exactly ONE centered square illustrated adult portrait.
 
 `;
+}
 
 
-      // ============================================================
-      // FAL GPT-IMAGE 1.5 EDIT REQUEST
-      // ============================================================
+// ================================================================
+// STAGE 2 PROMPT
+//
+// IDENTITY MASTER -> CUTE ADULT Q MASTER
+// ================================================================
 
-      const falBody = {
+function getQPrompt() {
 
-        prompt: identityPrompt,
+  return `
+
+Transform the supplied STAGYLIGHT IDENTITY MASTER into ONE
+premium cute adult Q-character.
+
+CRITICAL:
+
+DO NOT invent a new character.
+
+STYLIZE THE SUPPLIED IDENTITY MASTER ITSELF.
+
+The finished Q-character must remain immediately recognizable
+as the SAME PERSON represented by the supplied Identity Master.
+
+Target approximately:
+
+80 percent recognizable personal identity
+20 percent controlled Q-character stylization.
+
+============================================================
+IDENTITY MUST REMAIN STRONG
+============================================================
+
+Preserve:
+
+- recognizable face shape
+- recognizable jawline
+- recognizable chin
+- eyebrow shape
+- natural eye character
+- eye spacing
+- nose identity
+- mouth identity
+- facial balance
+- skin tone
+- hairstyle
+- hairline
+- hair colour
+- hair direction
+- clothing
+- visible accessories
+- gender presentation
+- adult appearance
+
+Do NOT replace the face with a generic cute character face.
+
+Do NOT make the person look like a completely different person.
+
+============================================================
+CUTE ADULT Q STYLE
+============================================================
+
+Create a polished cute Q-character illustration.
+
+Use MODERATE Q proportions.
+
+The head may be moderately larger than realistic proportions.
+
+The body may be moderately smaller.
+
+But the character must still look like a cute illustrated
+ADULT version of the same person.
+
+Do NOT create:
+
+- baby proportions
+- toddler proportions
+- infant appearance
+- baby-faced doll appearance
+- extremely round baby cheeks
+- tiny baby nose
+- giant anime eyes
+- oversized doll eyes
+
+The face must preserve enough mature structure to maintain
+identity.
+
+============================================================
+EYES
+============================================================
+
+The eyes may be slightly more expressive than Stage 1.
+
+However:
+
+Do NOT create giant anime eyes.
+
+Do NOT dramatically change the natural eye shape.
+
+Do NOT dramatically change eye spacing.
+
+Identity is more important than exaggerated cuteness.
+
+============================================================
+FACE
+============================================================
+
+Do not make the face excessively round.
+
+Do not erase the jawline.
+
+Do not make the chin extremely tiny.
+
+Do not replace the nose with a tiny generic cartoon nose.
+
+Do not replace the mouth with a generic doll mouth.
+
+Maintain recognizable facial geometry.
+
+============================================================
+HAIR
+============================================================
+
+Preserve the EXACT hairstyle established in the Identity Master.
+
+Preserve:
+
+- haircut
+- hairline
+- fringe
+- swept direction
+- top volume
+- side shape
+- texture
+- light and dark colour distribution
+
+Do NOT redesign the hairstyle.
+
+============================================================
+CLOTHING AND ACCESSORIES
+============================================================
+
+Preserve the clothing and main colours established in the
+Identity Master.
+
+Preserve clearly visible accessories.
+
+Do not randomly redesign the outfit.
+
+============================================================
+NO UNWANTED COSMETICS
+============================================================
+
+Do NOT add cosmetic styling that is not already present.
+
+Do NOT add:
+
+- pink cosmetic blush
+- lipstick
+- eyeliner
+- eyeshadow
+- exaggerated eyelashes
+- beauty makeup
+
+Cute appearance must come from controlled Q proportions,
+expression and illustration style — NOT cosmetic makeup.
+
+============================================================
+EXPRESSION
+============================================================
+
+Use a friendly, happy and appealing expression suitable for
+the person's MASTER Q avatar.
+
+Keep the expression natural enough that facial identity
+remains recognizable.
+
+Do not distort the face with an extreme expression.
+
+============================================================
+COMPOSITION
+============================================================
+
+NOTHING IMPORTANT MAY BE CROPPED.
+
+The complete hairstyle must be visible.
+
+The highest point of the hair must remain comfortably inside
+the square canvas.
+
+Leave approximately 10 to 15 percent clean background space
+above the highest point of the hairstyle.
+
+Leave safe background space on both sides.
+
+Keep completely inside the frame:
+
+- full hairstyle
+- top of head
+- sides of hair
+- ears where naturally visible
+- face
+- chin
+- neck
+- shoulders
+- upper body
+
+Nothing important should touch the canvas edge.
+
+Use a centered square composition.
+
+============================================================
+STYLE
+============================================================
+
+Use:
+
+- premium modern Q-character illustration
+- smooth clean rendering
+- polished linework
+- controlled soft shading
+- cute but mature adult proportions
+- expressive but recognizable face
+- professional avatar quality
+- clean attractive finish
+
+The result should feel suitable as the permanent STAGYLIGHT
+Master Q used to generate future stickers and reactions.
+
+============================================================
+BACKGROUND
+============================================================
+
+Use a simple clean neutral background.
+
+Do not add text.
+Do not add logos.
+Do not add a watermark.
+Do not add another person.
+Do not create multiple characters.
+Do not create a collage.
+Do not create a character sheet.
+
+============================================================
+FINAL PRIORITY
+============================================================
+
+1. SAME PERSON
+2. SAME FACE IDENTITY
+3. SAME HAIRSTYLE
+4. ADULT — NOT BABY
+5. SAME CLOTHING / ACCESSORIES
+6. COMPLETE HAIR AND HEAD INSIDE FRAME
+7. CUTE CONTROLLED Q STYLE
+8. PREMIUM FINISH
+
+If stronger Q stylization would damage identity,
+REDUCE the Q stylization.
+
+Do not invent a new Q character.
+
+Stylize the supplied Identity Master itself.
+
+Generate exactly ONE centered square Cute Adult Q Master.
+
+`;
+}
+
+
+// ================================================================
+// FAL HELPERS
+// ================================================================
+
+async function submitFalEdit(
+  env,
+  imageUrl,
+  prompt
+) {
+
+  const response = await fetch(
+    FAL_EDIT_ENDPOINT,
+    {
+      method: "POST",
+
+      headers: {
+        "Authorization":
+          `Key ${env.FAL_KEY}`,
+
+        "Content-Type":
+          "application/json"
+      },
+
+      body: JSON.stringify({
+
+        prompt,
 
         image_urls: [
-          body.image_url
+          imageUrl
         ],
 
         input_fidelity: "high",
@@ -505,102 +1095,133 @@ Generate exactly ONE centered square illustrated adult portrait.
         output_format: "png",
 
         sync_mode: false
-      };
-
-
-      // ============================================================
-      // SUBMIT STAGE 1 TO FAL
-      // ============================================================
-
-      const response = await fetch(
-        "https://queue.fal.run/fal-ai/gpt-image-1.5/edit",
-        {
-          method: "POST",
-
-          headers: {
-            "Authorization": `Key ${env.FAL_KEY}`,
-            "Content-Type": "application/json"
-          },
-
-          body: JSON.stringify(falBody)
-        }
-      );
-
-
-      const data = await response.text();
-
-
-      // ============================================================
-      // RETURN FAL QUEUE RESPONSE TO EXISTING ANDROID FLOW
-      // ============================================================
-
-      return new Response(
-        data,
-        {
-          status: response.status,
-
-          headers: {
-            ...corsHeaders,
-
-            "Content-Type":
-              response.headers.get("Content-Type") ||
-              "application/json"
-          }
-        }
-      );
-
-
-    } catch (error) {
-
-      return jsonResponse(
-        {
-          error: error.message
-        },
-        500,
-        corsHeaders
-      );
+      })
     }
+  );
+
+
+  const text =
+    await response.text();
+
+
+  let data;
+
+
+  try {
+    data = JSON.parse(text);
+  } catch {
+    throw new Error(
+      "fal.ai returned invalid JSON: " +
+      text
+    );
   }
-};
 
 
-// ================================================================
-// JSON RESPONSE HELPER
-// ================================================================
+  if (!response.ok) {
+    throw new Error(
+      data.detail ||
+      data.error ||
+      "fal.ai submission failed."
+    );
+  }
 
-function jsonResponse(data, status, corsHeaders) {
 
-  return new Response(
-    JSON.stringify(data),
+  return data;
+}
+
+
+async function fetchFalJson(
+  env,
+  url
+) {
+
+  const response = await fetch(
+    url,
     {
-      status: status,
-
       headers: {
-        ...corsHeaders,
-        "Content-Type": "application/json"
+        "Authorization":
+          `Key ${env.FAL_KEY}`
       }
     }
   );
+
+
+  const text =
+    await response.text();
+
+
+  let data;
+
+
+  try {
+    data = JSON.parse(text);
+  } catch {
+    throw new Error(
+      "fal.ai returned invalid JSON."
+    );
+  }
+
+
+  if (!response.ok) {
+    throw new Error(
+      data.detail ||
+      data.error ||
+      "fal.ai request failed."
+    );
+  }
+
+
+  return data;
+}
+
+
+function getFalStatus(data) {
+
+  return String(
+    data.status ||
+    data.state ||
+    ""
+  ).toUpperCase();
+}
+
+
+function extractImageUrl(data) {
+
+  if (
+    data &&
+    Array.isArray(data.images) &&
+    data.images.length > 0 &&
+    data.images[0] &&
+    data.images[0].url
+  ) {
+    return data.images[0].url;
+  }
+
+
+  if (
+    data &&
+    data.data &&
+    Array.isArray(data.data.images) &&
+    data.data.images.length > 0 &&
+    data.data.images[0] &&
+    data.data.images[0].url
+  ) {
+    return data.data.images[0].url;
+  }
+
+
+  return null;
 }
 
 
 // ================================================================
-// STAGYLIGHT DURABLE OBJECT
-//
-// This will later manage:
-//
-// Stage 1:
-// Human Photo -> Identity Master
-//
-// Stage 2:
-// Identity Master -> Cute Adult Q Master
-//
-// The actual two-stage automation is NOT enabled yet.
+// DURABLE OBJECT
 // ================================================================
 
 export class AIJobController {
 
   constructor(ctx, env) {
+
     this.ctx = ctx;
     this.env = env;
   }
@@ -610,36 +1231,788 @@ export class AIJobController {
 
     try {
 
-      return new Response(
-        JSON.stringify({
-          ok: true,
-          controller: "AIJobController",
-          message: "STAGYLIGHT AI Job Controller is ready"
-        }),
-        {
-          status: 200,
+      const body =
+        await request.json();
 
-          headers: {
-            "Content-Type": "application/json"
-          }
+
+      // ==========================================================
+      // FREE TEST
+      // ==========================================================
+
+      if (body.action === "test") {
+
+        return this.json({
+          ok: true,
+          controller:
+            "AIJobController",
+          message:
+            "STAGYLIGHT AI Job Controller is ready",
+          fal_called: false
+        });
+      }
+
+
+      // ==========================================================
+      // CREATE REAL JOB
+      // ==========================================================
+
+      if (body.action === "create") {
+
+        if (!body.image_url) {
+
+          return this.json(
+            {
+              ok: false,
+              error:
+                "No reference image received."
+            },
+            400
+          );
         }
+
+
+        const existing =
+          await this.ctx.storage.get(
+            "job"
+          );
+
+
+        if (
+          existing &&
+          existing.status !== "completed" &&
+          existing.status !== "failed"
+        ) {
+
+          return this.json(
+            {
+              ok: false,
+              error:
+                "This STAGYLIGHT AI job is already active."
+            },
+            409
+          );
+        }
+
+
+        // --------------------------------------------------------
+        // Submit Stage 1
+        // --------------------------------------------------------
+
+        const stage1 =
+          await submitFalEdit(
+            this.env,
+            body.image_url,
+            getIdentityPrompt()
+          );
+
+
+        if (
+          !stage1.status_url ||
+          !stage1.response_url
+        ) {
+
+          return this.json(
+            {
+              ok: false,
+              error:
+                "Stage 1 did not return the required fal.ai queue URLs."
+            },
+            502
+          );
+        }
+
+
+        const job = {
+
+          job_id: body.job_id,
+
+          status: "processing",
+
+          stage:
+            "stage1_identity_master",
+
+          original_image_url:
+            body.image_url,
+
+          stage1_status_url:
+            stage1.status_url,
+
+          stage1_response_url:
+            stage1.response_url,
+
+          stage1_image_url:
+            null,
+
+          stage2_status_url:
+            null,
+
+          stage2_response_url:
+            null,
+
+          final_q_url:
+            null,
+
+          created_at:
+            new Date().toISOString(),
+
+          updated_at:
+            new Date().toISOString(),
+
+          error:
+            null
+        };
+
+
+        await this.ctx.storage.put(
+          "job",
+          job
+        );
+
+
+        return this.json({
+          ok: true,
+
+          job_id:
+            job.job_id,
+
+          status:
+            job.status,
+
+          stage:
+            job.stage,
+
+          message:
+            "Stage 1 Identity Master started."
+        });
+      }
+
+
+      // ==========================================================
+      // STATUS / ADVANCE JOB
+      // ==========================================================
+
+      if (body.action === "status") {
+
+        let job =
+          await this.ctx.storage.get(
+            "job"
+          );
+
+
+        if (!job) {
+
+          return this.json(
+            {
+              ok: false,
+              error:
+                "STAGYLIGHT AI job not found."
+            },
+            404
+          );
+        }
+
+
+        if (
+          body.job_id &&
+          job.job_id !== body.job_id
+        ) {
+
+          return this.json(
+            {
+              ok: false,
+              error:
+                "STAGYLIGHT AI job ID mismatch."
+            },
+            409
+          );
+        }
+
+
+        // --------------------------------------------------------
+        // Already finished
+        // --------------------------------------------------------
+
+        if (
+          job.status === "completed"
+        ) {
+
+          return this.json({
+            ok: true,
+            job_id: job.job_id,
+            status: "completed",
+            stage: "completed",
+            image_url:
+              job.final_q_url
+          });
+        }
+
+
+        // --------------------------------------------------------
+        // Already failed
+        // --------------------------------------------------------
+
+        if (
+          job.status === "failed"
+        ) {
+
+          return this.json(
+            {
+              ok: false,
+              job_id:
+                job.job_id,
+              status:
+                "failed",
+              error:
+                job.error ||
+                "Q generation failed."
+            },
+            500
+          );
+        }
+
+
+        // ========================================================
+        // STAGE 1
+        // ========================================================
+
+        if (
+          job.stage ===
+          "stage1_identity_master"
+        ) {
+
+          const statusData =
+            await fetchFalJson(
+              this.env,
+              job.stage1_status_url
+            );
+
+
+          const falStatus =
+            getFalStatus(
+              statusData
+            );
+
+
+          if (
+            falStatus === "FAILED" ||
+            falStatus === "ERROR"
+          ) {
+
+            job.status = "failed";
+
+            job.error =
+              "Stage 1 Identity Master failed.";
+
+            job.updated_at =
+              new Date().toISOString();
+
+
+            await this.ctx.storage.put(
+              "job",
+              job
+            );
+
+
+            return this.json(
+              {
+                ok: false,
+                job_id:
+                  job.job_id,
+                status:
+                  "failed",
+                error:
+                  job.error
+              },
+              500
+            );
+          }
+
+
+          if (
+            falStatus !== "COMPLETED"
+          ) {
+
+            return this.json({
+              ok: true,
+              job_id:
+                job.job_id,
+              status:
+                "processing",
+              stage:
+                "stage1_identity_master",
+              fal_status:
+                falStatus ||
+                "PROCESSING"
+            });
+          }
+
+
+          // ------------------------------------------------------
+          // Stage 1 completed.
+          // Get Stage 1 result.
+          // ------------------------------------------------------
+
+          const stage1Result =
+            await fetchFalJson(
+              this.env,
+              job.stage1_response_url
+            );
+
+
+          const stage1Image =
+            extractImageUrl(
+              stage1Result
+            );
+
+
+          if (!stage1Image) {
+
+            job.status = "failed";
+
+            job.error =
+              "Stage 1 completed but no Identity Master image was returned.";
+
+            job.updated_at =
+              new Date().toISOString();
+
+
+            await this.ctx.storage.put(
+              "job",
+              job
+            );
+
+
+            return this.json(
+              {
+                ok: false,
+                job_id:
+                  job.job_id,
+                status:
+                  "failed",
+                error:
+                  job.error
+              },
+              500
+            );
+          }
+
+
+          job.stage1_image_url =
+            stage1Image;
+
+
+          // ------------------------------------------------------
+          // Submit Stage 2 using Stage-1 image.
+          // ------------------------------------------------------
+
+          const stage2 =
+            await submitFalEdit(
+              this.env,
+              stage1Image,
+              getQPrompt()
+            );
+
+
+          if (
+            !stage2.status_url ||
+            !stage2.response_url
+          ) {
+
+            job.status = "failed";
+
+            job.error =
+              "Stage 2 did not return the required fal.ai queue URLs.";
+
+            job.updated_at =
+              new Date().toISOString();
+
+
+            await this.ctx.storage.put(
+              "job",
+              job
+            );
+
+
+            return this.json(
+              {
+                ok: false,
+                job_id:
+                  job.job_id,
+                status:
+                  "failed",
+                error:
+                  job.error
+              },
+              502
+            );
+          }
+
+
+          job.stage =
+            "stage2_q_master";
+
+          job.stage2_status_url =
+            stage2.status_url;
+
+          job.stage2_response_url =
+            stage2.response_url;
+
+          job.updated_at =
+            new Date().toISOString();
+
+
+          await this.ctx.storage.put(
+            "job",
+            job
+          );
+
+
+          return this.json({
+            ok: true,
+
+            job_id:
+              job.job_id,
+
+            status:
+              "processing",
+
+            stage:
+              "stage2_q_master",
+
+            message:
+              "Identity Master completed. Cute Q Master started."
+          });
+        }
+
+
+        // ========================================================
+        // STAGE 2
+        // ========================================================
+
+        if (
+          job.stage ===
+          "stage2_q_master"
+        ) {
+
+          const statusData =
+            await fetchFalJson(
+              this.env,
+              job.stage2_status_url
+            );
+
+
+          const falStatus =
+            getFalStatus(
+              statusData
+            );
+
+
+          if (
+            falStatus === "FAILED" ||
+            falStatus === "ERROR"
+          ) {
+
+            job.status =
+              "failed";
+
+            job.error =
+              "Stage 2 Cute Q Master failed.";
+
+            job.updated_at =
+              new Date().toISOString();
+
+
+            await this.ctx.storage.put(
+              "job",
+              job
+            );
+
+
+            return this.json(
+              {
+                ok: false,
+                job_id:
+                  job.job_id,
+                status:
+                  "failed",
+                error:
+                  job.error
+              },
+              500
+            );
+          }
+
+
+          if (
+            falStatus !== "COMPLETED"
+          ) {
+
+            return this.json({
+              ok: true,
+
+              job_id:
+                job.job_id,
+
+              status:
+                "processing",
+
+              stage:
+                "stage2_q_master",
+
+              fal_status:
+                falStatus ||
+                "PROCESSING"
+            });
+          }
+
+
+          // ------------------------------------------------------
+          // Stage 2 completed.
+          // Get final Q.
+          // ------------------------------------------------------
+
+          const stage2Result =
+            await fetchFalJson(
+              this.env,
+              job.stage2_response_url
+            );
+
+
+          const finalQ =
+            extractImageUrl(
+              stage2Result
+            );
+
+
+          if (!finalQ) {
+
+            job.status =
+              "failed";
+
+            job.error =
+              "Stage 2 completed but no final Q image was returned.";
+
+            job.updated_at =
+              new Date().toISOString();
+
+
+            await this.ctx.storage.put(
+              "job",
+              job
+            );
+
+
+            return this.json(
+              {
+                ok: false,
+                job_id:
+                  job.job_id,
+                status:
+                  "failed",
+                error:
+                  job.error
+              },
+              500
+            );
+          }
+
+
+          job.final_q_url =
+            finalQ;
+
+          job.status =
+            "completed";
+
+          job.stage =
+            "completed";
+
+          job.updated_at =
+            new Date().toISOString();
+
+
+          await this.ctx.storage.put(
+            "job",
+            job
+          );
+
+
+          return this.json({
+            ok: true,
+
+            job_id:
+              job.job_id,
+
+            status:
+              "completed",
+
+            stage:
+              "completed",
+
+            image_url:
+              job.final_q_url
+          });
+        }
+
+
+        return this.json(
+          {
+            ok: false,
+            error:
+              "Unknown STAGYLIGHT job stage."
+          },
+          500
+        );
+      }
+
+
+      // ==========================================================
+      // RESULT
+      // ==========================================================
+
+      if (body.action === "result") {
+
+        const job =
+          await this.ctx.storage.get(
+            "job"
+          );
+
+
+        if (!job) {
+
+          return this.json(
+            {
+              ok: false,
+              error:
+                "STAGYLIGHT AI job not found."
+            },
+            404
+          );
+        }
+
+
+        if (
+          body.job_id &&
+          job.job_id !== body.job_id
+        ) {
+
+          return this.json(
+            {
+              ok: false,
+              error:
+                "STAGYLIGHT AI job ID mismatch."
+            },
+            409
+          );
+        }
+
+
+        if (
+          job.status !== "completed"
+        ) {
+
+          return this.json({
+            ok: true,
+            job_id:
+              job.job_id,
+            status:
+              job.status,
+            stage:
+              job.stage,
+            image_url:
+              null
+          });
+        }
+
+
+        return this.json({
+          ok: true,
+
+          job_id:
+            job.job_id,
+
+          status:
+            "completed",
+
+          stage:
+            "completed",
+
+          image_url:
+            job.final_q_url
+        });
+      }
+
+
+      return this.json(
+        {
+          ok: false,
+          error:
+            "Unknown AIJobController action."
+        },
+        400
       );
+
 
     } catch (error) {
 
-      return new Response(
-        JSON.stringify({
-          ok: false,
-          error: error.message
-        }),
-        {
-          status: 500,
+      // Save error if a real job exists.
+      try {
 
-          headers: {
-            "Content-Type": "application/json"
-          }
+        const job =
+          await this.ctx.storage.get(
+            "job"
+          );
+
+
+        if (job) {
+
+          job.status =
+            "failed";
+
+          job.error =
+            error.message;
+
+          job.updated_at =
+            new Date().toISOString();
+
+
+          await this.ctx.storage.put(
+            "job",
+            job
+          );
         }
+
+      } catch (_) {
+        // Ignore secondary storage error.
+      }
+
+
+      return this.json(
+        {
+          ok: false,
+          error:
+            error.message
+        },
+        500
       );
     }
+  }
+
+
+  json(
+    data,
+    status = 200
+  ) {
+
+    return new Response(
+      JSON.stringify(data),
+      {
+        status,
+
+        headers: {
+          "Content-Type":
+            "application/json"
+        }
+      }
+    );
   }
 }
