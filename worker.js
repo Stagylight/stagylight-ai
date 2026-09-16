@@ -93,95 +93,88 @@ export default {
       const falBody = {
 
         prompt:
+          "Transform the supplied photograph into ONE cute STAGYLIGHT " +
+          "Q-version illustration of the SAME PERSON. " +
 
-          "Create ONE cute STAGYLIGHT Q-version portrait of the " +
-          "EXACT SAME PERSON shown in the reference photograph. " +
+          "This is an IMAGE EDIT, not a redesign of the person. " +
 
-          "The number one priority is facial identity. The finished " +
-          "character must be immediately recognizable as the same real " +
-          "person in the reference image. " +
+          "HIGHEST PRIORITY: preserve the person's identity and facial " +
+          "likeness. The result must be immediately recognizable as the " +
+          "same person from the reference photograph. " +
 
-          "Preserve the person's distinctive face shape, forehead, " +
-          "jawline, cheeks, eyebrows, natural eye shape, eye spacing, " +
-          "nose shape, mouth shape, lips, skin tone and recognizable " +
+          "Keep the person's actual facial structure: same face shape, " +
+          "forehead, jawline, cheeks, eyebrows, eye shape and spacing, " +
+          "nose shape, mouth shape, lips, skin tone and distinctive " +
           "facial proportions. " +
 
-          "Do not replace these features with a generic anime face, " +
-          "generic doll face or generic chibi face. " +
+          "Do not substitute a generic anime, chibi or doll face. " +
 
-          "Keep the person's natural eye shape recognizable. The eyes " +
-          "may be slightly larger and friendlier for Q styling, but do " +
-          "not make them dramatically larger or rounder. " +
-
-          "Give the character a warm, happy and friendly natural smile. " +
-          "The expression should look cute and approachable without " +
-          "changing the person's identity. " +
-
-          "Preserve the visible gender presentation of the reference " +
-          "person exactly. Do not feminize or masculinize the person. " +
-
-          "Do not add lipstick, makeup, eyeliner, eyeshadow, prominent " +
-          "eyelashes or cosmetic blush unless clearly present in the " +
-          "reference photograph. " +
+          "Keep the eyes close to their real natural shape and size. " +
+          "Only slightly enlarge them if necessary for the Q style. " +
+          "Do not create huge round anime eyes. " +
 
           "Preserve the exact hairstyle, haircut, hair length, hairline, " +
-          "hair direction and hair colour shown in the reference image. " +
+          "hair direction and hair colour visible in the photograph. " +
 
-          "Preserve the clothing type and main clothing colours shown " +
-          "in the reference image. " +
+          "Preserve the person's visible gender presentation. " +
 
-          "Apply only moderate Q-version stylization: a slightly larger " +
-          "head, slightly smaller body and polished cute illustration " +
-          "finish. Keep the face substantially closer to the real person " +
-          "than to a generic cartoon character. " +
+          "Do not add makeup, lipstick, eyeliner, eyeshadow or prominent " +
+          "eyelashes unless those features already exist in the reference. " +
 
-          "Target approximately 80 percent recognizable real-person " +
-          "identity and 20 percent cute Q-character stylization. " +
+          "Preserve the same clothing design, clothing type and main " +
+          "colours visible in the original photograph. " +
 
-          "Generate exactly ONE person and ONE portrait. " +
-          "No collage, no character sheet, no alternate versions, " +
-          "no multiple poses and no additional people. " +
+          "Give the person a warm, happy and friendly natural expression. " +
 
-          "Use a clean simple background.",
+          "Apply a cute premium Q-character illustration style with a " +
+          "moderately larger head and slightly smaller body. " +
+
+          "Keep realistic recognizable facial features inside the " +
+          "illustrated Q style. Identity is much more important than " +
+          "exaggerated cartoon styling. " +
+
+          "The desired visual balance is approximately 80 percent " +
+          "recognizable real-person identity and 20 percent Q-character " +
+          "stylization. " +
+
+          "Generate exactly ONE person only. No second person. " +
+          "No collage. No character sheet. No multiple poses. " +
+          "No text. No watermark. " +
+
+          "Use a simple clean background.",
 
 
-        reference_image_url: body.image_url,
+        // GPT Image Edit expects an ARRAY of reference images
+        image_urls: [
+          body.image_url
+        ],
 
-        image_size: "square_hd",
+        // Maximum reference-image preservation option
+        input_fidelity: "high",
 
-        num_inference_steps: 28,
+        // Square STAGYLIGHT My Q image
+        image_size: "1024x1024",
 
-        guidance_scale: 4,
+        // Highest available generation quality
+        quality: "high",
 
-        true_cfg: 1,
+        background: "opaque",
 
-        // Maximum supported identity weight
-        id_weight: 1.0,
+        num_images: 1,
 
-        negative_prompt:
-          "different person, wrong identity, identity loss, " +
-          "generic anime face, generic chibi face, generic doll face, " +
-          "different face shape, different eyes, different nose, " +
-          "different mouth, different jawline, gender change, " +
-          "different hairstyle, long hair, different hair colour, " +
-          "different clothing, dress, skirt, school uniform, " +
-          "heavy makeup, lipstick, eyeliner, eyeshadow, " +
-          "prominent eyelashes, exaggerated blush, " +
-          "huge anime eyes, oversized round eyes, " +
-          "multiple people, multiple characters, character sheet, " +
-          "collage, multiple poses, text, watermark, signature, " +
-          "blurry, low quality, deformed face, extra limbs",
+        output_format: "png",
 
-        enable_safety_checker: true
+        // Keep queue/result URL behaviour
+        sync_mode: false
       };
 
 
       // ==========================================
-      // SEND TO FAL.AI FLUX PuLID
+      // SEND TO GPT-IMAGE 1.5 EDIT
       // ==========================================
 
       const response = await fetch(
-        "https://queue.fal.run/fal-ai/flux-pulid",
+        "https://queue.fal.run/fal-ai/gpt-image-1.5/edit",
         {
           method: "POST",
 
