@@ -29,8 +29,7 @@ export default {
 
 
       // =========================================================
-      // Q-STICKER GENERATION
-      // Saved Master Q -> Sticker
+      // BASIC Q-STICKER GENERATION
       // =========================================================
 
       if (body.action === "create_sticker") {
@@ -49,7 +48,16 @@ export default {
         const stickerType =
           String(body.sticker_type || "").toLowerCase();
 
-        if (stickerType !== "haha") {
+        const supportedStickers = [
+          "hi",
+          "haha",
+          "love",
+          "thankyou",
+          "sad",
+          "goodnight"
+        ];
+
+        if (!supportedStickers.includes(stickerType)) {
           return json(
             {
               ok: false,
@@ -63,7 +71,7 @@ export default {
         const result = await submitFal(
           env.FAL_KEY,
           body.image_url,
-          getHahaStickerPrompt()
+          getStickerPrompt(stickerType)
         );
 
         if (!result.ok || !result.data) {
@@ -81,18 +89,11 @@ export default {
         return json(
           {
             ok: true,
-
-            message:
-              "Haha Q-Sticker submitted.",
-
-            request_id:
-              result.data.request_id || null,
-
-            status_url:
-              result.data.status_url || null,
-
-            response_url:
-              result.data.response_url || null
+            message: "Q-Sticker submitted.",
+            sticker_type: stickerType,
+            request_id: result.data.request_id || null,
+            status_url: result.data.status_url || null,
+            response_url: result.data.response_url || null
           },
           200,
           cors
@@ -127,8 +128,7 @@ export default {
 
       if (body.action === "create_job") {
 
-        const jobId =
-          crypto.randomUUID();
+        const jobId = crypto.randomUUID();
 
         return forward(
           await controller(
@@ -139,8 +139,7 @@ export default {
               "create_job",
               {
                 job_id: jobId,
-                image_url:
-                  body.image_url || null
+                image_url: body.image_url || null
               }
             )
           ),
@@ -201,8 +200,6 @@ export default {
 
       // =========================================================
       // FAL STATUS / RESULT PROXY
-      //
-      // Used by Android for both Create My Q and stickers.
       // =========================================================
 
       if (
@@ -214,8 +211,7 @@ export default {
           body.url,
           {
             headers: {
-              "Authorization":
-                `Key ${env.FAL_KEY}`
+              "Authorization": `Key ${env.FAL_KEY}`
             }
           }
         );
@@ -224,14 +220,10 @@ export default {
           await r.text(),
           {
             status: r.status,
-
             headers: {
               ...cors,
-
               "Content-Type":
-                r.headers.get(
-                  "Content-Type"
-                ) ||
+                r.headers.get("Content-Type") ||
                 "application/json"
             }
           }
@@ -248,8 +240,7 @@ export default {
         return json(
           {
             ok: false,
-            error:
-              "No reference image received."
+            error: "No reference image received."
           },
           400,
           cors
@@ -266,11 +257,9 @@ export default {
         r.text,
         {
           status: r.status,
-
           headers: {
             ...cors,
-            "Content-Type":
-              "application/json"
+            "Content-Type": "application/json"
           }
         }
       );
@@ -301,13 +290,11 @@ export class AIJobController {
     this.env = env;
   }
 
-
   async fetch(request) {
 
     try {
 
-      const body =
-        await request.json();
+      const body = await request.json();
 
 
       // =========================================================
@@ -318,15 +305,9 @@ export class AIJobController {
 
         return controllerJson({
           ok: true,
-
-          controller:
-            "AIJobController",
-
-          message:
-            "STAGYLIGHT two-stage AI controller ready",
-
-          fal_called:
-            false
+          controller: "AIJobController",
+          message: "STAGYLIGHT two-stage AI controller ready",
+          fal_called: false
         });
       }
 
@@ -337,67 +318,38 @@ export class AIJobController {
 
       if (body.action === "create_job") {
 
-        const now =
-          new Date().toISOString();
+        const now = new Date().toISOString();
 
         const job = {
 
-          job_id:
-            body.job_id,
+          job_id: body.job_id,
 
-          status:
-            "created",
+          status: "created",
 
-          stage:
-            "waiting",
+          stage: "waiting",
 
-          source_image:
-            body.image_url || null,
+          source_image: body.image_url || null,
 
-          stage_1_status:
-            "not_started",
+          stage_1_status: "not_started",
+          stage_1_request_id: null,
+          stage_1_status_url: null,
+          stage_1_response_url: null,
+          stage_1_image: null,
 
-          stage_1_request_id:
-            null,
+          stage_2_status: "not_started",
+          stage_2_request_id: null,
+          stage_2_status_url: null,
+          stage_2_response_url: null,
+          stage_2_image: null,
 
-          stage_1_status_url:
-            null,
+          final_image: null,
 
-          stage_1_response_url:
-            null,
+          error: null,
 
-          stage_1_image:
-            null,
+          created_at: now,
+          updated_at: now,
 
-          stage_2_status:
-            "not_started",
-
-          stage_2_request_id:
-            null,
-
-          stage_2_status_url:
-            null,
-
-          stage_2_response_url:
-            null,
-
-          stage_2_image:
-            null,
-
-          final_image:
-            null,
-
-          error:
-            null,
-
-          created_at:
-            now,
-
-          updated_at:
-            now,
-
-          fal_called:
-            false
+          fal_called: false
         };
 
         await this.ctx.storage.put(
@@ -407,10 +359,7 @@ export class AIJobController {
 
         return controllerJson({
           ok: true,
-
-          message:
-            "STAGYLIGHT AI job created",
-
+          message: "STAGYLIGHT AI job created",
           job
         });
       }
@@ -423,17 +372,13 @@ export class AIJobController {
       if (body.action === "get_job") {
 
         const job =
-          await this.ctx.storage.get(
-            "job"
-          );
+          await this.ctx.storage.get("job");
 
         if (!job) {
-
           return controllerJson(
             {
               ok: false,
-              error:
-                "Job not found."
+              error: "Job not found."
             },
             404
           );
@@ -453,29 +398,23 @@ export class AIJobController {
       if (body.action === "start_job") {
 
         let job =
-          await this.ctx.storage.get(
-            "job"
-          );
+          await this.ctx.storage.get("job");
 
         if (!job) {
-
           return controllerJson(
             {
               ok: false,
-              error:
-                "Job not found."
+              error: "Job not found."
             },
             404
           );
         }
 
         if (!body.image_url) {
-
           return controllerJson(
             {
               ok: false,
-              error:
-                "Missing image_url."
+              error: "Missing image_url."
             },
             400
           );
@@ -491,26 +430,16 @@ export class AIJobController {
 
           return controllerJson({
             ok: true,
-
-            message:
-              "Stage 1 already started.",
-
+            message: "Stage 1 already started.",
             job
           });
         }
 
 
-        job.source_image =
-          body.image_url;
-
-        job.status =
-          "processing";
-
-        job.stage =
-          "stage_1";
-
-        job.stage_1_status =
-          "submitting";
+        job.source_image = body.image_url;
+        job.status = "processing";
+        job.stage = "stage_1";
+        job.stage_1_status = "submitting";
 
         await saveJob(
           this.ctx,
@@ -531,11 +460,8 @@ export class AIJobController {
           !result.data
         ) {
 
-          job.status =
-            "error";
-
-          job.stage_1_status =
-            "error";
+          job.status = "error";
+          job.stage_1_status = "error";
 
           job.error =
             result.text ||
@@ -557,23 +483,18 @@ export class AIJobController {
         }
 
 
-        job.stage_1_status =
-          "submitted";
+        job.stage_1_status = "submitted";
 
         job.stage_1_request_id =
-          result.data.request_id ||
-          null;
+          result.data.request_id || null;
 
         job.stage_1_status_url =
-          result.data.status_url ||
-          null;
+          result.data.status_url || null;
 
         job.stage_1_response_url =
-          result.data.response_url ||
-          null;
+          result.data.response_url || null;
 
-        job.fal_called =
-          true;
+        job.fal_called = true;
 
         await saveJob(
           this.ctx,
@@ -583,10 +504,7 @@ export class AIJobController {
 
         return controllerJson({
           ok: true,
-
-          message:
-            "Stage 1 submitted.",
-
+          message: "Stage 1 submitted.",
           job
         });
       }
@@ -596,58 +514,40 @@ export class AIJobController {
       // ADVANCE JOB
       // =========================================================
 
-      if (
-        body.action ===
-        "advance_job"
-      ) {
+      if (body.action === "advance_job") {
 
         let job =
-          await this.ctx.storage.get(
-            "job"
-          );
+          await this.ctx.storage.get("job");
 
         if (!job) {
-
           return controllerJson(
             {
               ok: false,
-              error:
-                "Job not found."
+              error: "Job not found."
             },
             404
           );
         }
 
 
-        if (
-          job.status ===
-          "completed"
-        ) {
+        if (job.status === "completed") {
 
           return controllerJson({
             ok: true,
-
-            message:
-              "Q Master is ready.",
-
+            message: "Q Master is ready.",
             job
           });
         }
 
 
-        if (
-          job.status ===
-          "error"
-        ) {
+        if (job.status === "error") {
 
           return controllerJson(
             {
               ok: false,
-
               error:
                 job.error ||
                 "AI job failed.",
-
               job
             },
             500
@@ -660,10 +560,8 @@ export class AIJobController {
         // =======================================================
 
         if (
-          job.stage_1_status ===
-            "submitted" ||
-          job.stage_1_status ===
-            "processing"
+          job.stage_1_status === "submitted" ||
+          job.stage_1_status === "processing"
         ) {
 
           const check =
@@ -674,13 +572,9 @@ export class AIJobController {
             );
 
 
-          if (
-            check.state ===
-            "processing"
-          ) {
+          if (check.state === "processing") {
 
-            job.stage_1_status =
-              "processing";
+            job.stage_1_status = "processing";
 
             await saveJob(
               this.ctx,
@@ -689,28 +583,17 @@ export class AIJobController {
 
             return controllerJson({
               ok: true,
-
-              message:
-                "Stage 1 is processing.",
-
+              message: "Stage 1 is processing.",
               job
             });
           }
 
 
-          if (
-            check.state ===
-            "error"
-          ) {
+          if (check.state === "error") {
 
-            job.status =
-              "error";
-
-            job.stage_1_status =
-              "error";
-
-            job.error =
-              check.error;
+            job.status = "error";
+            job.stage_1_status = "error";
+            job.error = check.error;
 
             await saveJob(
               this.ctx,
@@ -720,8 +603,7 @@ export class AIJobController {
             return controllerJson(
               {
                 ok: false,
-                error:
-                  check.error,
+                error: check.error,
                 job
               },
               500
@@ -730,18 +612,13 @@ export class AIJobController {
 
 
           const stage1Image =
-            extractImage(
-              check.data
-            );
+            extractImage(check.data);
 
 
           if (!stage1Image) {
 
-            job.status =
-              "error";
-
-            job.stage_1_status =
-              "error";
+            job.status = "error";
+            job.stage_1_status = "error";
 
             job.error =
               "Stage 1 completed but no image was returned.";
@@ -754,8 +631,7 @@ export class AIJobController {
             return controllerJson(
               {
                 ok: false,
-                error:
-                  job.error,
+                error: job.error,
                 job
               },
               500
@@ -763,14 +639,9 @@ export class AIJobController {
           }
 
 
-          job.stage_1_status =
-            "completed";
-
-          job.stage_1_image =
-            stage1Image;
-
-          job.stage =
-            "stage_2";
+          job.stage_1_status = "completed";
+          job.stage_1_image = stage1Image;
+          job.stage = "stage_2";
 
           await saveJob(
             this.ctx,
@@ -784,17 +655,12 @@ export class AIJobController {
         // =======================================================
 
         if (
-          job.stage_1_status ===
-            "completed" &&
-          job.stage_2_status ===
-            "not_started"
+          job.stage_1_status === "completed" &&
+          job.stage_2_status === "not_started"
         ) {
 
-          job.stage_2_status =
-            "submitting";
-
-          job.stage =
-            "stage_2";
+          job.stage_2_status = "submitting";
+          job.stage = "stage_2";
 
           await saveJob(
             this.ctx,
@@ -815,11 +681,8 @@ export class AIJobController {
             !result.data
           ) {
 
-            job.status =
-              "error";
-
-            job.stage_2_status =
-              "error";
+            job.status = "error";
+            job.stage_2_status = "error";
 
             job.error =
               result.text ||
@@ -833,8 +696,7 @@ export class AIJobController {
             return controllerJson(
               {
                 ok: false,
-                error:
-                  job.error,
+                error: job.error,
                 job
               },
               500
@@ -842,20 +704,16 @@ export class AIJobController {
           }
 
 
-          job.stage_2_status =
-            "submitted";
+          job.stage_2_status = "submitted";
 
           job.stage_2_request_id =
-            result.data.request_id ||
-            null;
+            result.data.request_id || null;
 
           job.stage_2_status_url =
-            result.data.status_url ||
-            null;
+            result.data.status_url || null;
 
           job.stage_2_response_url =
-            result.data.response_url ||
-            null;
+            result.data.response_url || null;
 
           await saveJob(
             this.ctx,
@@ -865,10 +723,8 @@ export class AIJobController {
 
           return controllerJson({
             ok: true,
-
             message:
               "Stage 1 complete. Stage 2 submitted.",
-
             job
           });
         }
@@ -879,10 +735,8 @@ export class AIJobController {
         // =======================================================
 
         if (
-          job.stage_2_status ===
-            "submitted" ||
-          job.stage_2_status ===
-            "processing"
+          job.stage_2_status === "submitted" ||
+          job.stage_2_status === "processing"
         ) {
 
           const check =
@@ -893,13 +747,9 @@ export class AIJobController {
             );
 
 
-          if (
-            check.state ===
-            "processing"
-          ) {
+          if (check.state === "processing") {
 
-            job.stage_2_status =
-              "processing";
+            job.stage_2_status = "processing";
 
             await saveJob(
               this.ctx,
@@ -908,28 +758,17 @@ export class AIJobController {
 
             return controllerJson({
               ok: true,
-
-              message:
-                "Stage 2 is processing.",
-
+              message: "Stage 2 is processing.",
               job
             });
           }
 
 
-          if (
-            check.state ===
-            "error"
-          ) {
+          if (check.state === "error") {
 
-            job.status =
-              "error";
-
-            job.stage_2_status =
-              "error";
-
-            job.error =
-              check.error;
+            job.status = "error";
+            job.stage_2_status = "error";
+            job.error = check.error;
 
             await saveJob(
               this.ctx,
@@ -939,8 +778,7 @@ export class AIJobController {
             return controllerJson(
               {
                 ok: false,
-                error:
-                  check.error,
+                error: check.error,
                 job
               },
               500
@@ -949,18 +787,13 @@ export class AIJobController {
 
 
           const finalImage =
-            extractImage(
-              check.data
-            );
+            extractImage(check.data);
 
 
           if (!finalImage) {
 
-            job.status =
-              "error";
-
-            job.stage_2_status =
-              "error";
+            job.status = "error";
+            job.stage_2_status = "error";
 
             job.error =
               "Stage 2 completed but no image was returned.";
@@ -973,8 +806,7 @@ export class AIJobController {
             return controllerJson(
               {
                 ok: false,
-                error:
-                  job.error,
+                error: job.error,
                 job
               },
               500
@@ -982,23 +814,13 @@ export class AIJobController {
           }
 
 
-          job.stage_2_status =
-            "completed";
+          job.stage_2_status = "completed";
+          job.stage_2_image = finalImage;
+          job.final_image = finalImage;
 
-          job.stage_2_image =
-            finalImage;
-
-          job.final_image =
-            finalImage;
-
-          job.status =
-            "completed";
-
-          job.stage =
-            "completed";
-
-          job.error =
-            null;
+          job.status = "completed";
+          job.stage = "completed";
+          job.error = null;
 
           await saveJob(
             this.ctx,
@@ -1008,10 +830,8 @@ export class AIJobController {
 
           return controllerJson({
             ok: true,
-
             message:
               "STAGYLIGHT Q Master completed.",
-
             job
           });
         }
@@ -1019,10 +839,7 @@ export class AIJobController {
 
         return controllerJson({
           ok: true,
-
-          message:
-            "Job is waiting.",
-
+          message: "Job is waiting.",
           job
         });
       }
@@ -1082,40 +899,30 @@ async function submitFal(
           imageUrl
         ],
 
-        input_fidelity:
-          "high",
+        input_fidelity: "high",
 
-        image_size:
-          "1024x1024",
+        image_size: "1024x1024",
 
-        quality:
-          "high",
+        quality: "high",
 
-        background:
-          "opaque",
+        background: "opaque",
 
-        num_images:
-          1,
+        num_images: 1,
 
-        output_format:
-          "png",
+        output_format: "png",
 
-        sync_mode:
-          false
+        sync_mode: false
       })
     }
   );
 
 
-  const text =
-    await r.text();
+  const text = await r.text();
 
-  let data =
-    null;
+  let data = null;
 
   try {
-    data =
-      JSON.parse(text);
+    data = JSON.parse(text);
   } catch (_) {}
 
 
@@ -1142,7 +949,6 @@ async function checkFal(
 
     return {
       state: "error",
-
       error:
         "Missing fal.ai status URL."
     };
@@ -1161,19 +967,16 @@ async function checkFal(
     );
 
 
-  const text =
-    await r.text();
+  const text = await r.text();
 
   let data;
 
   try {
-    data =
-      JSON.parse(text);
+    data = JSON.parse(text);
   } catch (_) {
 
     return {
       state: "error",
-
       error:
         "Invalid fal.ai status response."
     };
@@ -1184,7 +987,6 @@ async function checkFal(
 
     return {
       state: "error",
-
       error:
         data?.detail ||
         data?.error ||
@@ -1210,9 +1012,7 @@ async function checkFal(
   }
 
 
-  if (
-    status !== "COMPLETED"
-  ) {
+  if (status !== "COMPLETED") {
 
     return {
       state: "processing"
@@ -1224,7 +1024,6 @@ async function checkFal(
 
     return {
       state: "error",
-
       error:
         "fal.ai completed but response URL is missing."
     };
@@ -1249,15 +1048,14 @@ async function checkFal(
   let resultData;
 
   try {
+
     resultData =
-      JSON.parse(
-        resultText
-      );
+      JSON.parse(resultText);
+
   } catch (_) {
 
     return {
       state: "error",
-
       error:
         "Invalid fal.ai result response."
     };
@@ -1268,7 +1066,6 @@ async function checkFal(
 
     return {
       state: "error",
-
       error:
         resultData?.detail ||
         resultData?.error ||
@@ -1404,34 +1201,25 @@ the face into a typical chibi or anime face.
 
 The final character must be unmistakably the SAME ADULT PERSON.
 
-============================================================
-FACE — ALMOST NO GEOMETRIC CHANGE
-============================================================
-
-Keep the face extremely close to the supplied Identity Master.
+FACE — ALMOST NO GEOMETRIC CHANGE:
 
 Preserve:
 
 - exact face length-to-width ratio
 - forehead height and width
-- cheek width
-- cheekbone position
+- cheek width and placement
 - jawline and jaw angle
 - chin length, width and shape
 - eyebrow shape, thickness and position
 - exact natural eye shape
-- exact eye opening
-- eye size
-- iris size relative to the eye
+- exact eye opening and size
+- iris size relative to eye
 - eye spacing
 - eyelids
 - eyebrow-to-eye distance
-- nose bridge
-- nose length
-- nose tip
+- nose bridge, length and tip
 - nostril width
-- mouth width
-- mouth shape
+- mouth width and shape
 - cupid's bow
 - lip thickness
 - nose-to-mouth distance
@@ -1449,36 +1237,21 @@ DO NOT enlarge the forehead.
 
 DO NOT shrink the nose or chin.
 
-DO NOT smooth away distinctive facial features.
-
 The FACE itself should receive MINIMAL Q distortion.
 
-============================================================
-EYES — STRICT LOCK
-============================================================
+EYES — STRICT LOCK:
 
-DO NOT enlarge the eyes.
+DO NOT enlarge, widen or round the eyes.
 
-DO NOT widen the eyes.
+DO NOT create anime, doll or childlike eyes.
 
-DO NOT make the eyes rounder.
+Keep the same natural eye anatomy.
 
-DO NOT create anime eyes, doll eyes or childlike eyes.
-
-Keep the same natural eye shape, size, eyelid opening,
-iris proportion and spacing as the Identity Master.
-
-Expression may change slightly without changing eye anatomy.
-
-============================================================
-ADULT — STRICT LOCK
-============================================================
-
-The character MUST clearly remain an adult.
+ADULT — STRICT LOCK:
 
 NO baby face.
-NO toddler appearance.
-NO child appearance.
+NO toddler.
+NO child.
 NO baby-faced chibi.
 NO inflated cheeks.
 NO tiny nose.
@@ -1486,92 +1259,45 @@ NO tiny chin.
 NO extremely round head.
 NO youthful doll face.
 
-Do not make the person appear substantially younger.
+Q STYLE:
 
-============================================================
-Q STYLE
-============================================================
-
-Create the Q-character feeling primarily through:
+Create the Q feeling mainly through:
 
 - polished cute illustration rendering
-- slightly larger head relative to the body
+- slightly larger head relative to body
 - moderately compact shoulders and upper body
 - clean Q-avatar silhouette
 - friendly expression
-- premium sticker-like presentation
+- premium sticker presentation
 
-Do NOT enlarge individual facial features to create cuteness.
+Do NOT enlarge facial features to create cuteness.
 
-Do NOT substantially change facial geometry.
+The face stays recognizable and mature.
 
-The head-to-body relationship may change,
-but the FACE INSIDE THE HEAD stays recognizable and mature.
+Use mild Q proportions only.
 
-Use only mild Q proportions.
+HAIR:
 
-Avoid extreme super-deformed chibi proportions.
+Preserve the SAME hairstyle, hairline, haircut, fringe,
+direction, top volume, side shape, texture, length and
+colour distribution.
 
-============================================================
-HAIR
-============================================================
+CLOTHING AND ACCESSORIES:
 
-Preserve the SAME hairstyle:
+Preserve the same clothing, colours and visible accessories.
 
-- hairline
-- haircut
-- fringe
-- swept direction
-- top volume
-- side shape
-- texture
-- length
-- colour distribution
-- dark/light areas
+NO MAKEUP:
 
-Do NOT redesign the hair.
+Do NOT add cosmetic blush, pink cheeks, lipstick,
+eyeliner, eyeshadow, artificial eyelashes or beauty makeup.
 
-If necessary, reconstruct the natural continuation of the
-same hairstyle so the complete hair is visible.
+EXPRESSION:
 
-============================================================
-CLOTHING AND ACCESSORIES
-============================================================
+Pleasant, friendly and confident adult expression.
 
-Preserve the same clothing, main colours and visible accessories
-from the Identity Master.
+Use a small natural smile.
 
-Do NOT redesign the outfit.
-
-============================================================
-NO MAKEUP
-============================================================
-
-Do NOT add:
-
-- cosmetic blush
-- pink cheeks
-- lipstick
-- eyeliner
-- eyeshadow
-- artificial eyelashes
-- beauty makeup
-
-Cuteness must NOT come from cosmetics.
-
-============================================================
-EXPRESSION
-============================================================
-
-Use a pleasant, friendly and confident adult expression.
-
-A small natural smile is suitable.
-
-Keep the person's recognizable mouth structure.
-
-============================================================
-STYLE
-============================================================
+STYLE:
 
 Premium modern STAGYLIGHT Q illustration.
 
@@ -1582,37 +1308,18 @@ Refined facial detail.
 Smooth controlled shading.
 Professional avatar/sticker quality.
 
-The FACE should be more structurally realistic than a normal
-chibi character.
+The FACE should remain more structurally realistic than
+a normal chibi character.
 
-The BODY may be more Q-stylized than the face.
+COMPOSITION:
 
-Do NOT make the final image photorealistic.
-Do NOT make it generic anime.
-Do NOT make it childish.
+Show entire hairstyle, full head, complete face, chin,
+neck, shoulders and upper body.
 
-============================================================
-COMPOSITION
-============================================================
+Leave approximately 10 to 15 percent clean background
+above the hairstyle.
 
-Show:
-
-- entire hairstyle
-- full head
-- complete face
-- chin
-- neck
-- shoulders
-- upper body
-
-Leave approximately 10 to 15 percent clean background above
-the highest point of the hairstyle.
-
-Nothing important may touch or leave the canvas.
-
-Zoom out when necessary.
-
-Center the character on a simple clean neutral background.
+Center on a clean neutral background.
 
 No text.
 No watermark.
@@ -1621,17 +1328,15 @@ No extra person.
 No collage.
 No multiple versions.
 
-============================================================
-FINAL PRIORITY
-============================================================
+FINAL PRIORITY:
 
-1. SAME FACE AS THE IDENTITY MASTER
-2. SAME RECOGNIZABLE ADULT PERSON
+1. SAME FACE
+2. SAME ADULT PERSON
 3. NATURAL ORIGINAL EYES
 4. ORIGINAL FACE LENGTH / JAW / CHIN
 5. ORIGINAL NOSE AND MOUTH
 6. SAME HAIRSTYLE
-7. MILD Q HEAD-TO-BODY PROPORTIONS
+7. MILD Q PROPORTIONS
 8. SAME CLOTHING / ACCESSORIES
 9. NO MAKEUP OR BLUSH
 10. PREMIUM STAGYLIGHT QUALITY
@@ -1639,8 +1344,6 @@ FINAL PRIORITY
 IF CUTENESS CONFLICTS WITH IDENTITY:
 
 IDENTITY MUST WIN.
-
-DO NOT CREATE A NEW CHIBI FACE.
 
 KEEP THE EXISTING FACE AND Q-STYLIZE THE CHARACTER AROUND IT.
 
@@ -1651,116 +1354,265 @@ Generate exactly ONE square Adult Q Master.
 
 
 // ===============================================================
-// HAHA Q-STICKER PROMPT
-// MASTER Q -> SAME CHARACTER LAUGHING
+// BASIC Q-STICKER PROMPTS
 // ===============================================================
 
-function getHahaStickerPrompt() {
+function getStickerPrompt(type) {
+
+  const reactions = {
+
+    hi: `
+HI / GREETING REACTION 👋
+
+Create a warm, friendly greeting.
+
+The character is smiling naturally and raising ONE hand
+in a clear friendly waving gesture.
+
+Expression:
+pleasant, welcoming, confident and cheerful.
+
+Do not exaggerate the smile or eyes.
+
+The result should clearly communicate "Hi!" without using text.
+`,
+
+    haha: `
+HAHA / LAUGHING REACTION 😂
+
+Create a genuinely joyful laughing expression.
+
+Use a natural open smile or laugh, happy eyes and a playful
+upper-body reaction.
+
+The character should look strongly amused and cheerful.
+
+Do not create huge anime eyes or distort the mouth beyond
+recognition.
+
+The result should clearly communicate laughter without text.
+`,
+
+    love: `
+LOVE / AFFECTION REACTION ❤️
+
+Create a sweet, warm and affectionate reaction.
+
+Use a gentle happy smile.
+
+The character may form a small heart gesture using the hands
+or hold both hands naturally near the chest.
+
+The expression should communicate affection and appreciation.
+
+Keep it mature and natural.
+
+Do NOT add romantic makeup, blush or exaggerated pink cheeks.
+
+The result should clearly communicate love without text.
+`,
+
+    thankyou: `
+THANK YOU / GRATITUDE REACTION 🙏
+
+Create a sincere grateful expression.
+
+Use a warm natural smile.
+
+Place the hands together respectfully in front of the chest
+in a clear gratitude / thank-you gesture.
+
+Keep the pose friendly, natural and mature.
+
+The result should clearly communicate gratitude without text.
+`,
+
+    sad: `
+SAD / UPSET REACTION 😢
+
+Create a clearly sad and emotionally disappointed expression.
+
+The mouth may turn slightly downward.
+
+The eyes should look naturally sad and emotional.
+
+A small natural tear is allowed.
+
+Do NOT enlarge the eyes.
+Do NOT create giant cartoon tears.
+Do NOT turn the face into a different character.
+
+Keep the sadness believable, gentle and recognizable.
+
+The result should clearly communicate sadness without text.
+`,
+
+    goodnight: `
+GOOD NIGHT / SLEEPY REACTION 🌙
+
+Create a peaceful, sleepy good-night reaction.
+
+Use relaxed or gently closed eyes and a calm soft expression.
+
+The character may rest the side of the face naturally against
+joined hands in a sleeping gesture.
+
+Keep the same hairstyle and clothing clearly recognizable.
+
+Do NOT add nightwear or redesign the outfit.
+
+The result should clearly communicate good night / sleep
+without text.
+`
+  };
+
+
+  const reaction =
+    reactions[type] ||
+    reactions.haha;
+
 
   return `
 
-Create ONE "HAHA" reaction Q-Sticker using the EXACT SAME
-STAGYLIGHT Q CHARACTER shown in the supplied Master Q image.
+Create exactly ONE premium STAGYLIGHT Q reaction sticker using
+the supplied MASTER Q image.
 
-THIS IMAGE IS THE CHARACTER MASTER.
+THE SUPPLIED IMAGE IS THE CHARACTER MASTER.
 
-DO NOT create a new character.
+ABSOLUTE RULE:
 
-DO NOT redesign the person's face.
+KEEP THE EXACT SAME CHARACTER.
 
-DO NOT change their identity.
-
-The finished sticker must immediately look like the EXACT SAME
-Q CHARACTER.
+DO NOT invent a new Q character.
+DO NOT redesign the face.
+DO NOT reinterpret the person's identity.
+DO NOT change the character's age.
 
 ============================================================
-CHARACTER IDENTITY LOCK
+IDENTITY LOCK
 ============================================================
+
+The underlying facial structure must remain the SAME even when
+the emotion changes the facial muscles.
 
 Preserve:
 
 - same recognizable face
-- same face shape
-- same adult appearance
-- same eye identity
+- same face length-to-width ratio
+- same forehead
+- same cheek structure
+- same jawline
+- same chin
 - same eyebrows
-- same nose
-- same mouth structure
-- same jaw and chin
+- same eye placement
+- same natural eye anatomy
+- same nose shape and size
+- same mouth identity
+- same lower-face proportions
 - same skin tone
-- same hairstyle
-- same hair colour distribution
-- same clothing
-- same visible accessories
-- same overall Q art style
+- same adult appearance
+- same distinctive facial characteristics
 
-Do NOT turn the character into a different anime or chibi person.
+EMOTION MAY CHANGE FACIAL MUSCLES.
 
-Do NOT make the character younger.
+EMOTION MUST NOT CHANGE FACIAL IDENTITY.
 
-Do NOT make the face rounder or more baby-like.
+Do NOT make the face wider or rounder.
 
-============================================================
-HAHA REACTION
-============================================================
+Do NOT shorten the face.
 
-Change mainly the EXPRESSION and POSE.
+Do NOT shrink the nose.
 
-Create a clearly happy laughing reaction.
+Do NOT shrink the chin.
 
-The character should look genuinely amused and joyful.
-
-Use:
-
-- cheerful laughing expression
-- natural smiling/laughing mouth
-- slightly raised happy cheeks
-- lively but recognizable eyes
-- playful positive energy
-- optional mild upper-body laughing gesture
-
-The expression should clearly communicate:
-
-HAHA 😂
-
-But the person's identity must remain recognizable.
-
-Do NOT make the eyes huge.
-
-Do NOT replace the eyes with generic anime shapes.
-
-Do NOT distort the mouth beyond recognition.
-
-Do NOT create an extreme screaming expression.
+Do NOT make the person younger.
 
 ============================================================
-CHARACTER CONSISTENCY
+HAIR LOCK
 ============================================================
 
-This sticker belongs to an existing STAGYLIGHT Q character set.
-
-It must look like the SAME character as the supplied Master Q.
-
-Do NOT change:
+Preserve exactly the same:
 
 - hairstyle
-- hair colour
-- outfit
-- accessories
-- skin tone
-- facial identity
-- Q illustration style
+- hairline
+- fringe
+- swept direction
+- top volume
+- side shape
+- length
+- texture
+- hair colour distribution
 
-Only expression and a small suitable pose change are allowed.
+Do NOT redesign the hairstyle.
 
 ============================================================
-NO UNWANTED MAKEUP
+CLOTHING + ACCESSORY LOCK
+============================================================
+
+Keep exactly the same main clothing and visible accessories
+as the supplied Master Q.
+
+Do NOT redesign the outfit merely to match the reaction.
+
+============================================================
+Q STYLE LOCK
+============================================================
+
+Match the supplied Master Q's existing illustration style.
+
+Maintain:
+
+- same Q-character design language
+- same level of facial realism
+- same adult Q proportions
+- same rendering quality
+- same smooth controlled shading
+- same premium STAGYLIGHT visual identity
+
+Do NOT convert the character into a generic anime,
+manga or baby chibi character.
+
+============================================================
+REACTION
+============================================================
+
+${reaction}
+
+============================================================
+STRICT EYE RULE
+============================================================
+
+Expression may naturally change the eyelids.
+
+However:
+
+DO NOT make the eyes larger than the Master Q.
+DO NOT make them rounder to create cuteness.
+DO NOT replace them with generic anime eyes.
+DO NOT create doll eyes.
+
+============================================================
+ADULT LOCK
+============================================================
+
+The character must clearly remain the same adult.
+
+NO baby face.
+NO toddler proportions.
+NO child appearance.
+NO inflated cheeks.
+NO tiny nose.
+NO tiny chin.
+NO youthful doll face.
+
+============================================================
+NO MAKEUP
 ============================================================
 
 Do NOT add:
 
 - cosmetic blush
-- pink cosmetic cheeks
+- artificial pink cheeks
 - lipstick
 - eyeliner
 - eyeshadow
@@ -1771,47 +1623,26 @@ Do NOT add:
 COMPOSITION
 ============================================================
 
-Show the complete hairstyle and head.
+Show the entire hairstyle and head.
 
-Do not crop the top of the hair.
+Do NOT crop the top of the hair.
 
-Keep the face, chin, neck, shoulders and enough upper body
-visible for the reaction.
+Show enough neck, shoulders, arms and upper body to clearly
+display the reaction gesture when needed.
 
-Leave comfortable clean space around the character.
+Keep all important hands and gestures inside the frame.
 
 Center the character.
 
-Use a simple clean neutral background.
+Use a clean simple neutral background suitable for a reaction
+sticker.
 
-============================================================
-STYLE
-============================================================
-
-Match the supplied Master Q's existing illustration style.
-
-Premium polished digital Q artwork.
-
-Clean edges.
-
-Smooth controlled shading.
-
-Cute but clearly adult.
-
-Professional reaction-sticker quality.
-
-No text.
-
-No words.
-
+No written text.
+No letters.
 No watermark.
-
 No logo.
-
-No additional people.
-
+No extra people.
 No collage.
-
 No multiple versions.
 
 ============================================================
@@ -1819,16 +1650,23 @@ FINAL PRIORITY
 ============================================================
 
 1. EXACT SAME MASTER Q CHARACTER
-2. SAME RECOGNIZABLE FACE
-3. SAME HAIR
-4. SAME CLOTHING
-5. CLEAR HAPPY LAUGHING REACTION
-6. ADULT APPEARANCE
-7. SAME ART STYLE
-8. NO UNWANTED MAKEUP
-9. COMPLETE HAIR INSIDE FRAME
+2. SAME FACE AND FACIAL STRUCTURE
+3. SAME ADULT IDENTITY
+4. SAME HAIRSTYLE
+5. SAME CLOTHING AND ACCESSORIES
+6. CORRECT REACTION / POSE
+7. SAME Q ART STYLE
+8. NATURAL FACIAL EXPRESSION
+9. NO UNWANTED MAKEUP
+10. PREMIUM STAGYLIGHT QUALITY
 
-Generate exactly ONE square Haha Q-Sticker.
+IF EMOTION CONFLICTS WITH IDENTITY:
+
+IDENTITY MUST WIN.
+
+CHANGE THE EMOTION, NOT THE PERSON.
+
+Generate exactly ONE square reaction Q-Sticker.
 
 `;
 }
@@ -1867,14 +1705,12 @@ function internalRequest(
 ) {
 
   return new Request(
-    "https://stagylight.internal/" +
-    action,
+    "https://stagylight.internal/" + action,
     {
       method: "POST",
 
       headers: {
-        "Content-Type":
-          "application/json"
+        "Content-Type": "application/json"
       },
 
       body: JSON.stringify({
@@ -1905,9 +1741,7 @@ function extractImage(data) {
 
   if (
     data &&
-    Array.isArray(
-      data.images
-    ) &&
+    Array.isArray(data.images) &&
     data.images.length > 0 &&
     data.images[0]?.url
   ) {
@@ -1932,7 +1766,6 @@ function json(
 
       headers: {
         ...cors,
-
         "Content-Type":
           "application/json"
       }
@@ -1968,12 +1801,10 @@ async function forward(
   return new Response(
     await response.text(),
     {
-      status:
-        response.status,
+      status: response.status,
 
       headers: {
         ...cors,
-
         "Content-Type":
           "application/json"
       }
