@@ -1,561 +1,151 @@
 export default {
   async fetch(request, env) {
-
-    const corsHeaders = {
+    const cors = {
       "Access-Control-Allow-Origin": "*",
       "Access-Control-Allow-Headers": "Content-Type",
       "Access-Control-Allow-Methods": "POST, OPTIONS"
     };
 
-    // ============================================================
-    // CORS
-    // ============================================================
-
     if (request.method === "OPTIONS") {
-      return new Response(null, {
-        headers: corsHeaders
+      return new Response(null, { headers: cors });
+    }
+
+    if (request.method !== "POST") {
+      return new Response("STAGYLIGHT AI Worker is working!", {
+        headers: { ...cors, "Content-Type": "text/plain" }
       });
     }
 
-    // ============================================================
-    // HEALTH CHECK
-    // ============================================================
-
-    if (request.method !== "POST") {
-      return new Response(
-        "STAGYLIGHT AI Worker is working!",
-        {
-          headers: {
-            ...corsHeaders,
-            "Content-Type": "text/plain"
-          }
-        }
-      );
-    }
-
     try {
-
       const body = await request.json();
 
-      // ============================================================
-      // DURABLE OBJECT HEALTH TEST
-      // ============================================================
+      // =========================================================
+      // DURABLE OBJECT ROUTES
+      // =========================================================
 
       if (body.action === "job_test") {
-
-        const controller = getController(
-          env,
-          "stagylight-main-ai-controller"
-        );
-
-        if (!controller) {
-          return jsonResponse(
-            {
-              ok: false,
-              error: "AI_JOB_CONTROLLER binding is unavailable."
-            },
-            500,
-            corsHeaders
-          );
-        }
-
-        const response = await controller.fetch(
-          new Request(
-            "https://stagylight.internal/job-test",
-            {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json"
-              },
-              body: JSON.stringify({
-                action: "job_test"
-              })
-            }
-          )
-        );
-
-        return forwardControllerResponse(
-          response,
-          corsHeaders
+        return forward(
+          await controller(env, "stagylight-main-ai-controller").fetch(
+            internalRequest("job_test", body)
+          ),
+          cors
         );
       }
-
-      // ============================================================
-      // CREATE TWO-STAGE AI JOB
-      //
-      // This creates the job only.
-      // No fal.ai generation happens here.
-      // ============================================================
 
       if (body.action === "create_job") {
-
         const jobId = crypto.randomUUID();
 
-        const controller = getController(
-          env,
-          jobId
-        );
-
-        if (!controller) {
-          return jsonResponse(
-            {
-              ok: false,
-              error: "AI_JOB_CONTROLLER binding is unavailable."
-            },
-            500,
-            corsHeaders
-          );
-        }
-
-        const response = await controller.fetch(
-          new Request(
-            "https://stagylight.internal/create-job",
-            {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json"
-              },
-              body: JSON.stringify({
-                action: "create_job",
-                job_id: jobId,
-                image_url: body.image_url || null
-              })
-            }
-          )
-        );
-
-        return forwardControllerResponse(
-          response,
-          corsHeaders
+        return forward(
+          await controller(env, jobId).fetch(
+            internalRequest("create_job", {
+              job_id: jobId,
+              image_url: body.image_url || null
+            })
+          ),
+          cors
         );
       }
 
-      // ============================================================
-      // START TWO-STAGE AI JOB
-      //
-      // Requires:
-      // {
-      //   "action": "start_job",
-      //   "job_id": "...",
-      //   "image_url": "..."
-      // }
-      //
-      // This WILL submit Stage 1 to fal.ai.
-      // ============================================================
-
-      if (body.action === "start_job") {
-
+      if (
+        body.action === "start_job" ||
+        body.action === "advance_job" ||
+        body.action === "get_job"
+      ) {
         if (!body.job_id) {
-          return jsonResponse(
-            {
-              ok: false,
-              error: "Missing job_id."
-            },
+          return json(
+            { ok: false, error: "Missing job_id." },
             400,
-            corsHeaders
+            cors
           );
         }
 
-        if (!body.image_url) {
-          return jsonResponse(
-            {
-              ok: false,
-              error: "Missing image_url."
-            },
+        if (
+          body.action === "start_job" &&
+          !body.image_url
+        ) {
+          return json(
+            { ok: false, error: "Missing image_url." },
             400,
-            corsHeaders
+            cors
           );
         }
 
-        const controller = getController(
-          env,
-          body.job_id
-        );
-
-        if (!controller) {
-          return jsonResponse(
-            {
-              ok: false,
-              error: "AI_JOB_CONTROLLER binding is unavailable."
-            },
-            500,
-            corsHeaders
-          );
-        }
-
-        const response = await controller.fetch(
-          new Request(
-            "https://stagylight.internal/start-job",
-            {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json"
-              },
-              body: JSON.stringify({
-                action: "start_job",
-                job_id: body.job_id,
-                image_url: body.image_url
-              })
-            }
-          )
-        );
-
-        return forwardControllerResponse(
-          response,
-          corsHeaders
+        return forward(
+          await controller(env, body.job_id).fetch(
+            internalRequest(body.action, body)
+          ),
+          cors
         );
       }
 
-      // ============================================================
-      // ADVANCE TWO-STAGE AI JOB
-      //
-      // Android / client polls this action.
-      //
-      // The controller will:
-      //
-      // Stage 1 submitted
-      // -> check Stage 1
-      // -> collect Identity Master
-      // -> submit Stage 2
-      // -> check Stage 2
-      // -> collect final Q Master
-      //
-      // One call performs only the work needed for the current state.
-      // ============================================================
-
-      if (body.action === "advance_job") {
-
-        if (!body.job_id) {
-          return jsonResponse(
-            {
-              ok: false,
-              error: "Missing job_id."
-            },
-            400,
-            corsHeaders
-          );
-        }
-
-        const controller = getController(
-          env,
-          body.job_id
-        );
-
-        if (!controller) {
-          return jsonResponse(
-            {
-              ok: false,
-              error: "AI_JOB_CONTROLLER binding is unavailable."
-            },
-            500,
-            corsHeaders
-          );
-        }
-
-        const response = await controller.fetch(
-          new Request(
-            "https://stagylight.internal/advance-job",
-            {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json"
-              },
-              body: JSON.stringify({
-                action: "advance_job",
-                job_id: body.job_id
-              })
-            }
-          )
-        );
-
-        return forwardControllerResponse(
-          response,
-          corsHeaders
-        );
-      }
-
-      // ============================================================
-      // GET JOB
-      // ============================================================
-
-      if (body.action === "get_job") {
-
-        if (!body.job_id) {
-          return jsonResponse(
-            {
-              ok: false,
-              error: "Missing job_id."
-            },
-            400,
-            corsHeaders
-          );
-        }
-
-        const controller = getController(
-          env,
-          body.job_id
-        );
-
-        if (!controller) {
-          return jsonResponse(
-            {
-              ok: false,
-              error: "AI_JOB_CONTROLLER binding is unavailable."
-            },
-            500,
-            corsHeaders
-          );
-        }
-
-        const response = await controller.fetch(
-          new Request(
-            "https://stagylight.internal/get-job",
-            {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json"
-              },
-              body: JSON.stringify({
-                action: "get_job",
-                job_id: body.job_id
-              })
-            }
-          )
-        );
-
-        return forwardControllerResponse(
-          response,
-          corsHeaders
-        );
-      }
-
-      // ============================================================
-      // EXISTING ANDROID STATUS / RESULT PROXY
-      //
-      // KEEP OLD ANDROID FLOW WORKING.
-      // ============================================================
+      // =========================================================
+      // LEGACY STATUS / RESULT PROXY
+      // =========================================================
 
       if (body.action === "status" && body.url) {
-
-        const statusResponse = await fetch(
-          body.url,
-          {
-            headers: {
-              "Authorization": `Key ${env.FAL_KEY}`
-            }
+        const r = await fetch(body.url, {
+          headers: {
+            "Authorization": `Key ${env.FAL_KEY}`
           }
-        );
+        });
 
-        const statusData =
-          await statusResponse.text();
-
-        return new Response(
-          statusData,
-          {
-            status: statusResponse.status,
-            headers: {
-              ...corsHeaders,
-              "Content-Type":
-                statusResponse.headers.get(
-                  "Content-Type"
-                ) ||
-                "application/json"
-            }
+        return new Response(await r.text(), {
+          status: r.status,
+          headers: {
+            ...cors,
+            "Content-Type":
+              r.headers.get("Content-Type") ||
+              "application/json"
           }
-        );
+        });
       }
 
-      // ============================================================
-      // LEGACY STAGE-1 GENERATION
-      //
-      // IMPORTANT:
-      // The existing Android app can continue sending image_url
-      // without an action.
-      //
-      // This preserves the old working behaviour.
-      // ============================================================
+      // =========================================================
+      // LEGACY SINGLE-STAGE ROUTE
+      // =========================================================
 
       if (!body.image_url) {
-
-        return jsonResponse(
+        return json(
           {
             ok: false,
             error: "No reference image received."
           },
           400,
-          corsHeaders
+          cors
         );
       }
 
-      const legacyFalBody = {
-        prompt: getIdentityPrompt(),
-
-        image_urls: [
-          body.image_url
-        ],
-
-        input_fidelity: "high",
-
-        image_size: "1024x1024",
-
-        quality: "high",
-
-        background: "opaque",
-
-        num_images: 1,
-
-        output_format: "png",
-
-        sync_mode: false
-      };
-
-      const response = await fetch(
-        "https://queue.fal.run/fal-ai/gpt-image-1.5/edit",
-        {
-          method: "POST",
-
-          headers: {
-            "Authorization":
-              `Key ${env.FAL_KEY}`,
-
-            "Content-Type":
-              "application/json"
-          },
-
-          body: JSON.stringify(
-            legacyFalBody
-          )
-        }
+      const r = await submitFal(
+        env.FAL_KEY,
+        body.image_url,
+        getIdentityPrompt()
       );
 
-      const data =
-        await response.text();
-
-      return new Response(
-        data,
-        {
-          status: response.status,
-
-          headers: {
-            ...corsHeaders,
-
-            "Content-Type":
-              response.headers.get(
-                "Content-Type"
-              ) ||
-              "application/json"
-          }
+      return new Response(r.text, {
+        status: r.status,
+        headers: {
+          ...cors,
+          "Content-Type": "application/json"
         }
-      );
+      });
 
-    } catch (error) {
-
-      return jsonResponse(
+    } catch (e) {
+      return json(
         {
           ok: false,
-          error: error.message
+          error: e.message
         },
         500,
-        corsHeaders
+        cors
       );
     }
   }
 };
 
 
-// ================================================================
-// MAIN WORKER HELPERS
-// ================================================================
-
-function getController(
-  env,
-  name
-) {
-
-  if (!env.AI_JOB_CONTROLLER) {
-    return null;
-  }
-
-  const id =
-    env.AI_JOB_CONTROLLER.idFromName(
-      name
-    );
-
-  return env.AI_JOB_CONTROLLER.get(
-    id
-  );
-}
-
-
-function jsonResponse(
-  data,
-  status,
-  corsHeaders
-) {
-
-  return new Response(
-    JSON.stringify(data),
-    {
-      status: status,
-
-      headers: {
-        ...corsHeaders,
-        "Content-Type":
-          "application/json"
-      }
-    }
-  );
-}
-
-
-async function forwardControllerResponse(
-  response,
-  corsHeaders
-) {
-
-  const text =
-    await response.text();
-
-  return new Response(
-    text,
-    {
-      status: response.status,
-
-      headers: {
-        ...corsHeaders,
-        "Content-Type":
-          "application/json"
-      }
-    }
-  );
-}
-
-
-// ================================================================
-// STAGYLIGHT AI JOB CONTROLLER
-//
-// Each job_id receives its own Durable Object.
-//
-// STATE MACHINE:
-//
-// created
-//
-// -> stage_1_submitted
-//
-// -> stage_1_processing
-//
-// -> stage_1_complete
-//
-// -> stage_2_submitted
-//
-// -> stage_2_processing
-//
-// -> completed
-//
-// OR
-//
-// -> error
-// ================================================================
+// ===============================================================
+// DURABLE OBJECT
+// ===============================================================
 
 export class AIJobController {
 
@@ -564,147 +154,80 @@ export class AIJobController {
     this.env = env;
   }
 
-
   async fetch(request) {
-
     try {
+      const body = await request.json();
 
-      const body =
-        await request.json();
-
-      // ============================================================
-      // HEALTH TEST
-      // ============================================================
+      // =========================================================
+      // TEST
+      // =========================================================
 
       if (body.action === "job_test") {
-
         return controllerJson({
           ok: true,
-
-          controller:
-            "AIJobController",
-
-          message:
-            "STAGYLIGHT two-stage AI Job Controller is ready",
-
+          controller: "AIJobController",
+          message: "STAGYLIGHT two-stage AI controller ready",
           fal_called: false
         });
       }
 
-      // ============================================================
+      // =========================================================
       // CREATE JOB
-      // ============================================================
+      // =========================================================
 
       if (body.action === "create_job") {
-
-        if (!body.job_id) {
-
-          return controllerJson(
-            {
-              ok: false,
-              error:
-                "Missing job_id."
-            },
-            400
-          );
-        }
-
-        const now =
-          new Date().toISOString();
+        const now = new Date().toISOString();
 
         const job = {
+          job_id: body.job_id,
+          status: "created",
+          stage: "waiting",
 
-          job_id:
-            body.job_id,
+          source_image: body.image_url || null,
 
-          status:
-            "created",
+          stage_1_status: "not_started",
+          stage_1_request_id: null,
+          stage_1_status_url: null,
+          stage_1_response_url: null,
+          stage_1_image: null,
 
-          stage:
-            "waiting",
+          stage_2_status: "not_started",
+          stage_2_request_id: null,
+          stage_2_status_url: null,
+          stage_2_response_url: null,
+          stage_2_image: null,
 
-          source_image:
-            body.image_url || null,
+          final_image: null,
+          error: null,
 
-          stage_1_status:
-            "not_started",
+          created_at: now,
+          updated_at: now,
 
-          stage_1_request_id:
-            null,
-
-          stage_1_status_url:
-            null,
-
-          stage_1_response_url:
-            null,
-
-          stage_1_image:
-            null,
-
-          stage_2_status:
-            "not_started",
-
-          stage_2_request_id:
-            null,
-
-          stage_2_status_url:
-            null,
-
-          stage_2_response_url:
-            null,
-
-          stage_2_image:
-            null,
-
-          final_image:
-            null,
-
-          error:
-            null,
-
-          created_at:
-            now,
-
-          updated_at:
-            now,
-
-          fal_called:
-            false
+          fal_called: false
         };
 
-        await this.ctx.storage.put(
-          "job",
-          job
-        );
+        await this.ctx.storage.put("job", job);
 
         return controllerJson({
           ok: true,
-
-          message:
-            "STAGYLIGHT AI job created",
-
-          job: job
+          message: "STAGYLIGHT AI job created",
+          job
         });
       }
 
-      // ============================================================
+      // =========================================================
       // GET JOB
-      // ============================================================
+      // =========================================================
 
       if (body.action === "get_job") {
-
         const job =
-          await this.ctx.storage.get(
-            "job"
-          );
+          await this.ctx.storage.get("job");
 
         if (!job) {
-
           return controllerJson(
             {
               ok: false,
-              error:
-                "Job not found."
+              error: "Job not found."
             },
             404
           );
@@ -712,753 +235,370 @@ export class AIJobController {
 
         return controllerJson({
           ok: true,
-          job: job
+          job
         });
       }
 
-      // ============================================================
-      // START JOB
-      //
-      // Submit Stage 1.
-      // ============================================================
+      // =========================================================
+      // START STAGE 1
+      // =========================================================
 
       if (body.action === "start_job") {
-
         let job =
-          await this.ctx.storage.get(
-            "job"
-          );
+          await this.ctx.storage.get("job");
 
         if (!job) {
-
           return controllerJson(
             {
               ok: false,
-              error:
-                "Job not found."
+              error: "Job not found."
             },
             404
           );
         }
 
         if (!body.image_url) {
-
           return controllerJson(
             {
               ok: false,
-              error:
-                "Missing image_url."
+              error: "Missing image_url."
             },
             400
           );
         }
 
-        // Prevent duplicate paid submission.
-
-        if (
-          job.stage_1_status !==
-          "not_started"
-        ) {
-
+        // Prevent duplicate paid calls.
+        if (job.stage_1_status !== "not_started") {
           return controllerJson({
             ok: true,
-
-            message:
-              "Stage 1 already started.",
-
-            job: job
+            message: "Stage 1 already started.",
+            job
           });
         }
 
-        job.source_image =
-          body.image_url;
+        job.source_image = body.image_url;
+        job.status = "processing";
+        job.stage = "stage_1";
+        job.stage_1_status = "submitting";
+        job.updated_at = new Date().toISOString();
 
-        job.status =
-          "processing";
+        await this.ctx.storage.put("job", job);
 
-        job.stage =
-          "stage_1";
-
-        job.stage_1_status =
-          "submitting";
-
-        job.updated_at =
-          new Date().toISOString();
-
-        await this.ctx.storage.put(
-          "job",
-          job
+        const result = await submitFal(
+          this.env.FAL_KEY,
+          body.image_url,
+          getIdentityPrompt()
         );
 
-        const falBody = {
-
-          prompt:
-            getIdentityPrompt(),
-
-          image_urls: [
-            body.image_url
-          ],
-
-          input_fidelity:
-            "high",
-
-          image_size:
-            "1024x1024",
-
-          quality:
-            "high",
-
-          background:
-            "opaque",
-
-          num_images:
-            1,
-
-          output_format:
-            "png",
-
-          sync_mode:
-            false
-        };
-
-        const falResponse =
-          await fetch(
-            "https://queue.fal.run/fal-ai/gpt-image-1.5/edit",
-            {
-              method: "POST",
-
-              headers: {
-                "Authorization":
-                  `Key ${this.env.FAL_KEY}`,
-
-                "Content-Type":
-                  "application/json"
-              },
-
-              body:
-                JSON.stringify(
-                  falBody
-                )
-            }
-          );
-
-        const falText =
-          await falResponse.text();
-
-        let falData;
-
-        try {
-          falData =
-            JSON.parse(falText);
-        } catch {
-          falData = null;
-        }
-
-        if (
-          !falResponse.ok ||
-          !falData
-        ) {
-
-          job.status =
-            "error";
-
-          job.stage_1_status =
-            "error";
-
+        if (!result.ok || !result.data) {
+          job.status = "error";
+          job.stage_1_status = "error";
           job.error =
-            falText ||
+            result.text ||
             "Stage 1 submission failed.";
 
-          job.updated_at =
-            new Date().toISOString();
-
-          await this.ctx.storage.put(
-            "job",
-            job
-          );
+          await saveJob(this.ctx, job);
 
           return controllerJson(
             {
               ok: false,
-              error:
-                "Stage 1 submission failed.",
-              details:
-                falText,
-              job: job
+              error: job.error,
+              job
             },
             500
           );
         }
 
-        job.stage_1_status =
-          "submitted";
-
+        job.stage_1_status = "submitted";
         job.stage_1_request_id =
-          falData.request_id || null;
+          result.data.request_id || null;
 
         job.stage_1_status_url =
-          falData.status_url || null;
+          result.data.status_url || null;
 
         job.stage_1_response_url =
-          falData.response_url || null;
+          result.data.response_url || null;
 
-        job.fal_called =
-          true;
+        job.fal_called = true;
 
-        job.updated_at =
-          new Date().toISOString();
-
-        await this.ctx.storage.put(
-          "job",
-          job
-        );
+        await saveJob(this.ctx, job);
 
         return controllerJson({
           ok: true,
-
-          message:
-            "Stage 1 submitted.",
-
-          job: job
+          message: "Stage 1 submitted.",
+          job
         });
       }
 
-      // ============================================================
-      // ADVANCE JOB
-      // ============================================================
+      // =========================================================
+      // ADVANCE TWO-STAGE JOB
+      // =========================================================
 
       if (body.action === "advance_job") {
-
         let job =
-          await this.ctx.storage.get(
-            "job"
-          );
+          await this.ctx.storage.get("job");
 
         if (!job) {
-
           return controllerJson(
             {
               ok: false,
-              error:
-                "Job not found."
+              error: "Job not found."
             },
             404
           );
         }
 
-        // Already complete.
-
-        if (
-          job.status ===
-          "completed"
-        ) {
-
+        if (job.status === "completed") {
           return controllerJson({
             ok: true,
-
-            message:
-              "Q Master is ready.",
-
-            job: job
+            message: "Q Master is ready.",
+            job
           });
         }
 
-        // Existing error.
-
-        if (
-          job.status ===
-          "error"
-        ) {
-
+        if (job.status === "error") {
           return controllerJson(
             {
               ok: false,
               error:
-                job.error ||
-                "AI job failed.",
-              job: job
+                job.error || "AI job failed.",
+              job
             },
             500
           );
         }
 
-        // ==========================================================
-        // STAGE 1 STATUS
-        // ==========================================================
+        // =======================================================
+        // CHECK STAGE 1
+        // =======================================================
 
         if (
-          job.stage_1_status ===
-          "submitted" ||
-          job.stage_1_status ===
-          "processing"
+          job.stage_1_status === "submitted" ||
+          job.stage_1_status === "processing"
         ) {
+          const check = await checkFal(
+            job.stage_1_status_url,
+            job.stage_1_response_url,
+            this.env.FAL_KEY
+          );
 
-          const result =
-            await checkFalJob(
-              job.stage_1_status_url,
-              job.stage_1_response_url,
-              this.env.FAL_KEY
-            );
-
-          if (
-            result.state ===
-            "processing"
-          ) {
-
-            job.stage_1_status =
-              "processing";
-
-            job.updated_at =
-              new Date().toISOString();
-
-            await this.ctx.storage.put(
-              "job",
-              job
-            );
+          if (check.state === "processing") {
+            job.stage_1_status = "processing";
+            await saveJob(this.ctx, job);
 
             return controllerJson({
               ok: true,
-
-              message:
-                "Stage 1 is processing.",
-
-              job: job
+              message: "Stage 1 is processing.",
+              job
             });
           }
 
-          if (
-            result.state ===
-            "error"
-          ) {
+          if (check.state === "error") {
+            job.status = "error";
+            job.stage_1_status = "error";
+            job.error = check.error;
 
-            job.status =
-              "error";
-
-            job.stage_1_status =
-              "error";
-
-            job.error =
-              result.error;
-
-            job.updated_at =
-              new Date().toISOString();
-
-            await this.ctx.storage.put(
-              "job",
-              job
-            );
+            await saveJob(this.ctx, job);
 
             return controllerJson(
               {
                 ok: false,
-                error:
-                  result.error,
-                job: job
+                error: check.error,
+                job
               },
               500
             );
           }
 
-          if (
-            result.state ===
-            "completed"
-          ) {
+          const stage1Image =
+            extractImage(check.data);
 
-            const imageUrl =
-              extractFalImage(
-                result.data
-              );
+          if (!stage1Image) {
+            job.status = "error";
+            job.stage_1_status = "error";
+            job.error =
+              "Stage 1 completed but no image was returned.";
 
-            if (!imageUrl) {
+            await saveJob(this.ctx, job);
 
-              job.status =
-                "error";
-
-              job.stage_1_status =
-                "error";
-
-              job.error =
-                "Stage 1 completed but no image URL was found.";
-
-              job.updated_at =
-                new Date().toISOString();
-
-              await this.ctx.storage.put(
-                "job",
+            return controllerJson(
+              {
+                ok: false,
+                error: job.error,
                 job
-              );
-
-              return controllerJson(
-                {
-                  ok: false,
-                  error:
-                    job.error,
-                  job: job
-                },
-                500
-              );
-            }
-
-            job.stage_1_status =
-              "completed";
-
-            job.stage_1_image =
-              imageUrl;
-
-            job.stage =
-              "stage_2";
-
-            job.updated_at =
-              new Date().toISOString();
-
-            await this.ctx.storage.put(
-              "job",
-              job
+              },
+              500
             );
           }
+
+          job.stage_1_status = "completed";
+          job.stage_1_image = stage1Image;
+          job.stage = "stage_2";
+
+          await saveJob(this.ctx, job);
         }
 
-        // ==========================================================
+        // =======================================================
         // SUBMIT STAGE 2
-        // ==========================================================
+        // =======================================================
 
         if (
-          job.stage_1_status ===
-            "completed" &&
-          job.stage_2_status ===
-            "not_started"
+          job.stage_1_status === "completed" &&
+          job.stage_2_status === "not_started"
         ) {
+          job.stage_2_status = "submitting";
+          job.stage = "stage_2";
 
-          job.stage_2_status =
-            "submitting";
+          await saveJob(this.ctx, job);
 
-          job.stage =
-            "stage_2";
-
-          job.updated_at =
-            new Date().toISOString();
-
-          await this.ctx.storage.put(
-            "job",
-            job
+          const result = await submitFal(
+            this.env.FAL_KEY,
+            job.stage_1_image,
+            getQMasterPrompt()
           );
 
-          const falBody = {
-
-            prompt:
-              getQMasterPrompt(),
-
-            image_urls: [
-              job.stage_1_image
-            ],
-
-            input_fidelity:
-              "high",
-
-            image_size:
-              "1024x1024",
-
-            quality:
-              "high",
-
-            background:
-              "opaque",
-
-            num_images:
-              1,
-
-            output_format:
-              "png",
-
-            sync_mode:
-              false
-          };
-
-          const falResponse =
-            await fetch(
-              "https://queue.fal.run/fal-ai/gpt-image-1.5/edit",
-              {
-                method: "POST",
-
-                headers: {
-                  "Authorization":
-                    `Key ${this.env.FAL_KEY}`,
-
-                  "Content-Type":
-                    "application/json"
-                },
-
-                body:
-                  JSON.stringify(
-                    falBody
-                  )
-              }
-            );
-
-          const falText =
-            await falResponse.text();
-
-          let falData;
-
-          try {
-            falData =
-              JSON.parse(falText);
-          } catch {
-            falData = null;
-          }
-
-          if (
-            !falResponse.ok ||
-            !falData
-          ) {
-
-            job.status =
-              "error";
-
-            job.stage_2_status =
-              "error";
-
+          if (!result.ok || !result.data) {
+            job.status = "error";
+            job.stage_2_status = "error";
             job.error =
-              falText ||
+              result.text ||
               "Stage 2 submission failed.";
 
-            job.updated_at =
-              new Date().toISOString();
-
-            await this.ctx.storage.put(
-              "job",
-              job
-            );
+            await saveJob(this.ctx, job);
 
             return controllerJson(
               {
                 ok: false,
-                error:
-                  "Stage 2 submission failed.",
-                details:
-                  falText,
-                job: job
+                error: job.error,
+                job
               },
               500
             );
           }
 
-          job.stage_2_status =
-            "submitted";
+          job.stage_2_status = "submitted";
 
           job.stage_2_request_id =
-            falData.request_id || null;
+            result.data.request_id || null;
 
           job.stage_2_status_url =
-            falData.status_url || null;
+            result.data.status_url || null;
 
           job.stage_2_response_url =
-            falData.response_url || null;
+            result.data.response_url || null;
 
-          job.updated_at =
-            new Date().toISOString();
-
-          await this.ctx.storage.put(
-            "job",
-            job
-          );
+          await saveJob(this.ctx, job);
 
           return controllerJson({
             ok: true,
-
             message:
               "Stage 1 complete. Stage 2 submitted.",
-
-            job: job
+            job
           });
         }
 
-        // ==========================================================
-        // STAGE 2 STATUS
-        // ==========================================================
+        // =======================================================
+        // CHECK STAGE 2
+        // =======================================================
 
         if (
-          job.stage_2_status ===
-            "submitted" ||
-          job.stage_2_status ===
-            "processing"
+          job.stage_2_status === "submitted" ||
+          job.stage_2_status === "processing"
         ) {
+          const check = await checkFal(
+            job.stage_2_status_url,
+            job.stage_2_response_url,
+            this.env.FAL_KEY
+          );
 
-          const result =
-            await checkFalJob(
-              job.stage_2_status_url,
-              job.stage_2_response_url,
-              this.env.FAL_KEY
-            );
+          if (check.state === "processing") {
+            job.stage_2_status = "processing";
 
-          if (
-            result.state ===
-            "processing"
-          ) {
-
-            job.stage_2_status =
-              "processing";
-
-            job.updated_at =
-              new Date().toISOString();
-
-            await this.ctx.storage.put(
-              "job",
-              job
-            );
+            await saveJob(this.ctx, job);
 
             return controllerJson({
               ok: true,
-
-              message:
-                "Stage 2 is processing.",
-
-              job: job
+              message: "Stage 2 is processing.",
+              job
             });
           }
 
-          if (
-            result.state ===
-            "error"
-          ) {
+          if (check.state === "error") {
+            job.status = "error";
+            job.stage_2_status = "error";
+            job.error = check.error;
 
-            job.status =
-              "error";
-
-            job.stage_2_status =
-              "error";
-
-            job.error =
-              result.error;
-
-            job.updated_at =
-              new Date().toISOString();
-
-            await this.ctx.storage.put(
-              "job",
-              job
-            );
+            await saveJob(this.ctx, job);
 
             return controllerJson(
               {
                 ok: false,
-                error:
-                  result.error,
-                job: job
+                error: check.error,
+                job
               },
               500
             );
           }
 
-          if (
-            result.state ===
-            "completed"
-          ) {
+          const finalImage =
+            extractImage(check.data);
 
-            const imageUrl =
-              extractFalImage(
-                result.data
-              );
-
-            if (!imageUrl) {
-
-              job.status =
-                "error";
-
-              job.stage_2_status =
-                "error";
-
-              job.error =
-                "Stage 2 completed but no image URL was found.";
-
-              job.updated_at =
-                new Date().toISOString();
-
-              await this.ctx.storage.put(
-                "job",
-                job
-              );
-
-              return controllerJson(
-                {
-                  ok: false,
-                  error:
-                    job.error,
-                  job: job
-                },
-                500
-              );
-            }
-
-            job.stage_2_status =
-              "completed";
-
-            job.stage_2_image =
-              imageUrl;
-
-            job.final_image =
-              imageUrl;
-
-            job.status =
-              "completed";
-
-            job.stage =
-              "completed";
-
+          if (!finalImage) {
+            job.status = "error";
+            job.stage_2_status = "error";
             job.error =
-              null;
+              "Stage 2 completed but no image was returned.";
 
-            job.updated_at =
-              new Date().toISOString();
+            await saveJob(this.ctx, job);
 
-            await this.ctx.storage.put(
-              "job",
-              job
+            return controllerJson(
+              {
+                ok: false,
+                error: job.error,
+                job
+              },
+              500
             );
-
-            return controllerJson({
-              ok: true,
-
-              message:
-                "STAGYLIGHT Q Master completed.",
-
-              job: job
-            });
           }
-        }
 
-        // Nothing to advance yet.
+          job.stage_2_status = "completed";
+          job.stage_2_image = finalImage;
+          job.final_image = finalImage;
+
+          job.status = "completed";
+          job.stage = "completed";
+          job.error = null;
+
+          await saveJob(this.ctx, job);
+
+          return controllerJson({
+            ok: true,
+            message:
+              "STAGYLIGHT Q Master completed.",
+            job
+          });
+        }
 
         return controllerJson({
           ok: true,
-
-          message:
-            "Job is waiting.",
-
-          job: job
+          message: "Job is waiting.",
+          job
         });
       }
-
-      // ============================================================
-      // UNKNOWN ACTION
-      // ============================================================
 
       return controllerJson(
         {
           ok: false,
-          error:
-            "Unknown controller action."
+          error: "Unknown controller action."
         },
         400
       );
 
-    } catch (error) {
-
+    } catch (e) {
       return controllerJson(
         {
           ok: false,
-          error:
-            error.message
+          error: e.message
         },
         500
       );
@@ -1467,159 +607,578 @@ export class AIJobController {
 }
 
 
-// ================================================================
-// FAL JOB CHECKER
-// ================================================================
+// ===============================================================
+// FAL SUBMIT
+// ===============================================================
 
-async function checkFalJob(
+async function submitFal(
+  falKey,
+  imageUrl,
+  prompt
+) {
+  const r = await fetch(
+    "https://queue.fal.run/fal-ai/gpt-image-1.5/edit",
+    {
+      method: "POST",
+
+      headers: {
+        "Authorization": `Key ${falKey}`,
+        "Content-Type": "application/json"
+      },
+
+      body: JSON.stringify({
+        prompt,
+        image_urls: [imageUrl],
+
+        input_fidelity: "high",
+        image_size: "1024x1024",
+        quality: "high",
+        background: "opaque",
+
+        num_images: 1,
+        output_format: "png",
+        sync_mode: false
+      })
+    }
+  );
+
+  const text = await r.text();
+
+  let data = null;
+
+  try {
+    data = JSON.parse(text);
+  } catch (_) {}
+
+  return {
+    ok: r.ok,
+    status: r.status,
+    text,
+    data
+  };
+}
+
+
+// ===============================================================
+// FAL STATUS + RESULT
+// ===============================================================
+
+async function checkFal(
   statusUrl,
   responseUrl,
   falKey
 ) {
-
   if (!statusUrl) {
-
     return {
       state: "error",
-      error:
-        "Missing fal.ai status URL."
+      error: "Missing fal.ai status URL."
     };
   }
 
-  const statusResponse =
-    await fetch(
-      statusUrl,
-      {
-        headers: {
-          "Authorization":
-            `Key ${falKey}`
-        }
-      }
-    );
+  const r = await fetch(statusUrl, {
+    headers: {
+      "Authorization": `Key ${falKey}`
+    }
+  });
 
-  const statusText =
-    await statusResponse.text();
+  const text = await r.text();
 
-  let statusData;
+  let data;
 
   try {
-    statusData =
-      JSON.parse(statusText);
-  } catch {
-
+    data = JSON.parse(text);
+  } catch (_) {
     return {
       state: "error",
-      error:
-        "Invalid fal.ai status response."
+      error: "Invalid fal.ai status response."
     };
   }
 
-  if (!statusResponse.ok) {
-
+  if (!r.ok) {
     return {
       state: "error",
       error:
-        statusData?.detail ||
-        statusData?.error ||
-        statusText
+        data?.detail ||
+        data?.error ||
+        text
     };
   }
 
   const status =
-    String(
-      statusData.status || ""
-    ).toUpperCase();
+    String(data.status || "").toUpperCase();
 
   if (
     status === "IN_QUEUE" ||
     status === "IN_PROGRESS"
   ) {
-
     return {
-      state: "processing",
-      data: statusData
+      state: "processing"
     };
   }
 
-  if (
-    status === "COMPLETED"
-  ) {
-
-    if (!responseUrl) {
-
-      return {
-        state: "error",
-        error:
-          "fal.ai completed but response URL is missing."
-      };
-    }
-
-    const resultResponse =
-      await fetch(
-        responseUrl,
-        {
-          headers: {
-            "Authorization":
-              `Key ${falKey}`
-          }
-        }
-      );
-
-    const resultText =
-      await resultResponse.text();
-
-    let resultData;
-
-    try {
-      resultData =
-        JSON.parse(resultText);
-    } catch {
-
-      return {
-        state: "error",
-        error:
-          "Invalid fal.ai result response."
-      };
-    }
-
-    if (!resultResponse.ok) {
-
-      return {
-        state: "error",
-        error:
-          resultData?.detail ||
-          resultData?.error ||
-          resultText
-      };
-    }
-
+  if (status !== "COMPLETED") {
     return {
-      state: "completed",
-      data: resultData
+      state: "processing"
+    };
+  }
+
+  if (!responseUrl) {
+    return {
+      state: "error",
+      error:
+        "fal.ai completed but response URL is missing."
+    };
+  }
+
+  const result = await fetch(responseUrl, {
+    headers: {
+      "Authorization": `Key ${falKey}`
+    }
+  });
+
+  const resultText = await result.text();
+
+  let resultData;
+
+  try {
+    resultData = JSON.parse(resultText);
+  } catch (_) {
+    return {
+      state: "error",
+      error: "Invalid fal.ai result response."
+    };
+  }
+
+  if (!result.ok) {
+    return {
+      state: "error",
+      error:
+        resultData?.detail ||
+        resultData?.error ||
+        resultText
     };
   }
 
   return {
-    state: "processing",
-    data: statusData
+    state: "completed",
+    data: resultData
   };
 }
 
 
-// ================================================================
-// EXTRACT GENERATED IMAGE
-// ================================================================
+// ===============================================================
+// STAGE 1 — HUMAN PHOTO -> IDENTITY MASTER
+// KEEP REAL IDENTITY STRONG
+// ===============================================================
 
-function extractFalImage(data) {
+function getIdentityPrompt() {
+  return `
+Create ONE premium illustrated portrait of the EXACT SAME ADULT
+PERSON shown in the supplied reference photograph.
 
+This is STAGYLIGHT IDENTITY MASTER — STAGE 1.
+This is NOT the final Q character.
+
+IDENTITY IS THE HIGHEST PRIORITY.
+
+The result must immediately look like the SAME PERSON.
+
+Preserve the person's actual:
+
+- face length and width
+- forehead
+- cheek structure
+- jawline
+- chin
+- eyebrow shape
+- natural eye shape and size
+- eye spacing
+- eyelids
+- nose shape, width and length
+- mouth shape
+- lip proportions
+- skin tone
+- distinctive facial characteristics
+- adult age appearance
+- visible gender presentation
+
+Do NOT substitute generic anime or cartoon facial features.
+Do NOT beautify the person into somebody else.
+
+Preserve the hairstyle extremely carefully:
+
+- haircut
+- hairline
+- length
+- fringe
+- direction
+- side shape
+- top volume
+- texture
+- colour distribution
+
+If the source crops the very highest part of the hair,
+naturally reconstruct the continuation of the SAME hairstyle.
+
+Preserve visible clothing and accessories.
+
+Do NOT add makeup, lipstick, eyeliner, eyeshadow,
+artificial eyelashes, blush or pink cheeks unless clearly
+present in the source.
+
+Keep mature adult facial proportions.
+
+NO baby face.
+NO child appearance.
+NO huge anime eyes.
+NO excessively round cheeks.
+NO tiny nose.
+NO tiny chin.
+
+Create a polished premium digital illustration with mild
+stylization only.
+
+COMPOSITION:
+
+Show the complete hairstyle, head, face, chin, neck,
+shoulders and upper chest.
+
+Leave approximately 10 to 15 percent clean background above
+the highest point of the hairstyle.
+
+Nothing important may touch or leave the canvas.
+
+Center the person on a clean neutral background.
+
+If illustration style conflicts with recognizable identity,
+PRESERVE IDENTITY.
+
+Generate exactly ONE square portrait.
+`;
+}
+
+
+// ===============================================================
+// STAGE 2 — IDENTITY MASTER -> FINAL Q MASTER
+//
+// NEW VERSION:
+// FACE = VERY LIGHT STYLIZATION
+// Q EFFECT = MAINLY HEAD/BODY + ART STYLE
+// ===============================================================
+
+function getQMasterPrompt() {
+  return `
+Create ONE premium STAGYLIGHT ADULT Q CHARACTER by transforming
+the SUPPLIED IDENTITY MASTER ITSELF.
+
+CRITICAL RULE:
+
+THIS IS THE SAME PERSON.
+
+Do NOT invent a new face.
+Do NOT reinterpret the person's identity.
+Do NOT replace the face with a generic chibi/anime face.
+
+The supplied Identity Master already contains the correct facial
+identity. Treat its face as LOCKED REFERENCE GEOMETRY.
+
+TARGET:
+
+Approximately 90 percent recognizable personal identity.
+Approximately 10 percent facial Q stylization.
+
+Most of the cute Q feeling must come from:
+
+- slightly larger head-to-body ratio
+- smaller upper body
+- polished illustration rendering
+- friendly expression
+- clean avatar/sticker presentation
+
+NOT from changing the person's face.
+
+============================================================
+FACE GEOMETRY LOCK — HIGHEST PRIORITY
+============================================================
+
+Keep extremely close to the supplied Identity Master:
+
+- exact overall face shape
+- face length
+- face width
+- forehead height
+- cheek width
+- cheekbone placement
+- jaw width
+- jaw angle
+- chin length and shape
+- eyebrow shape and position
+- eye shape
+- eye size
+- eye spacing
+- eyelid structure
+- nose bridge
+- nose length
+- nose width
+- nostril proportions
+- mouth width
+- mouth shape
+- lip proportions
+- distance between nose and mouth
+- lower-face length
+- natural facial asymmetry where visible
+- skin tone
+- adult age appearance
+- visible gender presentation
+
+The viewer should recognize the SAME PERSON from the face alone.
+
+DO NOT simplify the face into standard chibi geometry.
+
+============================================================
+EYES — DO NOT ANIME-ENLARGE
+============================================================
+
+Keep the eyes close to their ORIGINAL size and shape.
+
+Only a VERY SMALL increase in expressiveness is allowed.
+
+Do NOT create:
+
+- giant round eyes
+- oversized anime eyes
+- doll eyes
+- sparkling childlike eyes
+- heavily widened eyes
+- thick cosmetic eyelashes
+
+Natural recognizable eye identity is more important than cuteness.
+
+============================================================
+NO BABY-FACE TRANSFORMATION
+============================================================
+
+The character MUST remain clearly ADULT.
+
+Do NOT:
+
+- shorten the face dramatically
+- inflate the cheeks
+- make the jaw extremely round
+- shrink the nose
+- shrink the chin
+- enlarge the forehead excessively
+- make toddler proportions
+- create a baby-faced chibi
+- create a doll face
+
+Keep the person's mature lower-face structure.
+
+============================================================
+Q PROPORTIONS
+============================================================
+
+Create controlled Q proportions WITHOUT rebuilding the face.
+
+The head may be approximately 15 to 20 percent larger relative
+to the upper body.
+
+Reduce the upper-body proportion moderately.
+
+Do NOT make the head enormous.
+
+Do NOT use extreme super-deformed chibi proportions.
+
+The result should feel like a premium adult Q avatar,
+not a children's cartoon character.
+
+============================================================
+HAIR — IDENTITY LOCK
+============================================================
+
+Preserve the hairstyle from the Identity Master.
+
+Keep:
+
+- hairline
+- haircut
+- fringe
+- swept direction
+- top volume
+- side shape
+- texture
+- hair length
+- light/dark colour distribution
+
+Do NOT replace the hairstyle with generic cartoon hair.
+
+The complete hairstyle must remain inside the image.
+
+============================================================
+CLOTHING + ACCESSORIES
+============================================================
+
+Keep the same recognizable clothing and visible accessories
+from the Identity Master.
+
+Do NOT redesign the outfit.
+
+============================================================
+NO UNWANTED COSMETICS
+============================================================
+
+Do NOT add:
+
+- blush
+- pink cheeks
+- lipstick
+- eyeliner
+- eyeshadow
+- beauty makeup
+- prominent artificial eyelashes
+
+Cute appearance must come from expression, proportions and
+illustration quality — NEVER cosmetic feminization.
+
+============================================================
+EXPRESSION
+============================================================
+
+Use a pleasant, confident, friendly ADULT expression.
+
+A mild natural smile is suitable.
+
+Keep the person's recognizable mouth shape.
+
+Do NOT create an exaggerated open-mouth cartoon expression.
+
+============================================================
+ART STYLE
+============================================================
+
+Use premium polished digital Q-character artwork.
+
+Clean edges.
+Smooth controlled shading.
+Refined facial detail.
+Professional avatar/sticker quality.
+
+The face should retain MORE realistic structural detail than
+a normal chibi character.
+
+Do NOT make it photorealistic.
+
+Do NOT make it generic anime.
+
+Do NOT make it childish.
+
+============================================================
+COMPOSITION
+============================================================
+
+Show completely:
+
+- full hairstyle
+- highest point of hair
+- full head
+- face
+- chin
+- neck
+- shoulders
+- upper body
+
+Leave approximately 10 to 15 percent clean background above
+the highest point of the hair.
+
+Nothing important may touch the canvas edge.
+
+Zoom out if necessary.
+
+Use a clean neutral background.
+
+No text.
+No watermark.
+No logo.
+No additional people.
+No collage.
+No multiple versions.
+
+============================================================
+FINAL PRIORITY
+============================================================
+
+1. SAME RECOGNIZABLE FACE
+2. SAME ADULT PERSON
+3. ORIGINAL EYE / NOSE / MOUTH / JAW GEOMETRY
+4. SAME HAIRSTYLE
+5. CONTROLLED ADULT Q PROPORTIONS
+6. SAME CLOTHING AND ACCESSORIES
+7. NO BLUSH OR UNWANTED MAKEUP
+8. FULL HAIR INSIDE FRAME
+9. PREMIUM STAGYLIGHT QUALITY
+
+If Q stylization conflicts with facial identity,
+FACIAL IDENTITY MUST WIN.
+
+Do not invent a Q character.
+
+Stylize the supplied Identity Master itself.
+
+Generate exactly ONE square Adult Q Master.
+`;
+}
+
+
+// ===============================================================
+// HELPERS
+// ===============================================================
+
+function controller(env, name) {
+  if (!env.AI_JOB_CONTROLLER) {
+    throw new Error(
+      "AI_JOB_CONTROLLER binding is unavailable."
+    );
+  }
+
+  const id =
+    env.AI_JOB_CONTROLLER.idFromName(name);
+
+  return env.AI_JOB_CONTROLLER.get(id);
+}
+
+
+function internalRequest(action, data) {
+  return new Request(
+    "https://stagylight.internal/" + action,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        ...data,
+        action
+      })
+    }
+  );
+}
+
+
+async function saveJob(ctx, job) {
+  job.updated_at =
+    new Date().toISOString();
+
+  await ctx.storage.put("job", job);
+}
+
+
+function extractImage(data) {
   if (
     data &&
     Array.isArray(data.images) &&
     data.images.length > 0 &&
-    data.images[0] &&
-    data.images[0].url
+    data.images[0]?.url
   ) {
-
     return data.images[0].url;
   }
 
@@ -1627,453 +1186,44 @@ function extractFalImage(data) {
 }
 
 
-// ================================================================
-// STAGE 1 PROMPT
-// HUMAN PHOTO -> IDENTITY MASTER
-// ================================================================
-
-function getIdentityPrompt() {
-
-  return `
-
-Create ONE premium illustrated portrait of the EXACT SAME PERSON
-shown in the supplied reference photograph.
-
-This is STAGYLIGHT IDENTITY MASTER — STAGE 1.
-
-THIS IS NOT THE FINAL Q CHARACTER.
-
-The highest priority is preserving the real person's recognizable
-adult identity.
-
-The finished portrait must immediately look like the SAME PERSON,
-not a fictional character inspired by them.
-
-Preserve:
-
-- overall face shape
-- forehead proportions
-- cheek structure and width
-- jawline
-- chin
-- eyebrow shape and position
-- natural eye shape and size
-- eye spacing
-- eyelids
-- nose shape, width and proportions
-- mouth shape
-- lip proportions
-- natural facial balance
-- natural skin tone
-- distinctive facial characteristics
-- visible gender presentation
-- apparent adult age
-
-Do NOT replace the face with generic anime or cartoon features.
-
-Do NOT beautify the person into somebody else.
-
-Keep mature adult facial proportions.
-
-Do NOT create:
-
-- a baby
-- toddler
-- child
-- baby-faced doll
-- childlike chibi
-- huge anime eyes
-- excessively round cheeks
-- tiny nose
-- tiny chin
-
-Preserve the person's hairstyle extremely carefully.
-
-Preserve:
-
-- haircut
-- hairline
-- hair length
-- fringe
-- swept direction
-- side shape
-- top volume
-- texture
-- colour distribution
-- dark and light areas
-
-Do NOT redesign the hairstyle.
-
-If the reference accidentally crops the highest part of the hair,
-naturally reconstruct the continuation of the SAME hairstyle.
-
-Preserve the visible clothing type, main colours and clearly
-visible accessories.
-
-Do not invent a completely different outfit.
-
-Do not add cosmetic styling that is not clearly present.
-
-Do NOT add:
-
-- lipstick
-- eyeliner
-- eyeshadow
-- artificial eyelashes
-- cosmetic blush
-- beauty makeup
-- pink cosmetic cheeks
-
-Use a natural pleasant adult expression.
-
-COMPOSITION IS CRITICAL.
-
-Nothing important may be cropped.
-
-Zoom out when necessary.
-
-The complete hairstyle and highest point of the hair must be
-inside the square canvas.
-
-Leave approximately 10 to 15 percent clean background space
-above the highest point of the hairstyle.
-
-Leave comfortable space on both sides.
-
-Keep completely inside the canvas:
-
-- full hairstyle
-- top of head
-- sides of hair
-- ears where naturally visible
-- complete face
-- chin
-- neck
-- shoulders
-- upper chest
-
-Frame approximately from upper chest upward.
-
-Center the person.
-
-Use a simple clean neutral background.
-
-STYLE:
-
-Create a polished premium digital illustration with clean edges,
-smooth controlled shading and refined facial detail.
-
-Only mild illustration stylization is allowed.
-
-REAL-PERSON IDENTITY must remain much stronger than stylization.
-
-Do NOT apply Q-character proportions yet.
-
-Do NOT substantially enlarge the head.
-
-Do NOT substantially shrink the body.
-
-Do NOT make the person look like a toy, doll or baby.
-
-FINAL PRIORITY:
-
-1. SAME REAL PERSON
-2. ADULT FACIAL IDENTITY
-3. SAME HAIRSTYLE
-4. FULL HEAD AND HAIR INSIDE FRAME
-5. SAME CLOTHING AND ACCESSORIES
-6. NATURAL PRESENTATION
-7. PREMIUM ILLUSTRATION QUALITY
-
-If stylization conflicts with identity, preserve identity.
-
-Generate exactly ONE centered square portrait.
-
-`;
+function json(data, status, cors) {
+  return new Response(
+    JSON.stringify(data),
+    {
+      status,
+      headers: {
+        ...cors,
+        "Content-Type": "application/json"
+      }
+    }
+  );
 }
 
-
-// ================================================================
-// STAGE 2 PROMPT
-// IDENTITY MASTER -> CUTE ADULT Q MASTER
-// ================================================================
-
-function getQMasterPrompt() {
-
-  return `
-
-Transform the supplied STAGYLIGHT IDENTITY MASTER into ONE
-premium CUTE ADULT Q CHARACTER.
-
-IMPORTANT:
-
-The supplied image already represents the correct person's identity.
-
-DO NOT invent a new character.
-
-DO NOT replace the person with a generic chibi character.
-
-STYLIZE THE SUPPLIED PERSON THEMSELVES.
-
-The target balance is approximately:
-
-80 percent recognizable personal identity
-20 percent controlled Q-character stylization.
-
-The finished Q character must remain immediately recognizable
-as the SAME ADULT PERSON shown in the supplied Identity Master.
-
-============================================================
-IDENTITY LOCK
-============================================================
-
-Preserve:
-
-- recognizable face shape
-- forehead proportions
-- cheek structure
-- jawline
-- chin
-- eyebrow identity
-- natural eye identity
-- eye spacing
-- nose identity
-- mouth identity
-- lip proportions
-- skin tone
-- distinctive facial characteristics
-- visible gender presentation
-- adult appearance
-
-Do NOT replace these with generic anime features.
-
-Do NOT make the person look like a different individual.
-
-============================================================
-CUTE Q STYLE
-============================================================
-
-Apply controlled premium Q-character styling.
-
-Use:
-
-- moderately larger head
-- moderately smaller upper body
-- cute polished proportions
-- clean smooth illustration
-- friendly expressive character quality
-- premium sticker/avatar finish
-
-The Q styling should be noticeable but controlled.
-
-The character MUST STILL LOOK LIKE AN ADULT.
-
-Do NOT create:
-
-- baby proportions
-- toddler proportions
-- child proportions
-- baby-faced chibi
-- giant anime eyes
-- doll face
-- extremely round face
-- tiny nose
-- tiny chin
-
-Do not destroy the natural jawline.
-
-Do not shorten the lower face excessively.
-
-The face must remain recognizable.
-
-============================================================
-EYES
-============================================================
-
-Eyes may become only MILDLY more expressive.
-
-Do NOT create giant round anime eyes.
-
-Do NOT dramatically enlarge the eyes.
-
-Preserve the person's recognizable natural eye shape and spacing.
-
-============================================================
-HAIR IDENTITY LOCK
-============================================================
-
-The hairstyle is part of the person's identity.
-
-Preserve:
-
-- exact hairstyle concept
-- hairline
-- fringe
-- swept direction
-- top volume
-- side shape
-- texture
-- hair length
-- visible colour distribution
-- dark and light areas
-
-Do NOT redesign the hairstyle.
-
-Do NOT replace it with a generic cartoon hairstyle.
-
-============================================================
-CLOTHING AND ACCESSORIES
-============================================================
-
-Preserve the same recognizable clothing and accessories from
-the supplied Identity Master.
-
-Do not randomly change clothing.
-
-Do not invent unrelated accessories.
-
-============================================================
-NO UNWANTED MAKEUP
-============================================================
-
-Do NOT add cosmetic styling that is not already present.
-
-Do NOT add:
-
-- lipstick
-- eyeliner
-- eyeshadow
-- prominent artificial eyelashes
-- cosmetic blush
-- pink cheeks
-- beauty makeup
-
-Cute appearance must come from illustration style,
-expression and controlled proportions — NOT makeup.
-
-============================================================
-EXPRESSION
-============================================================
-
-Use a pleasant, cheerful and approachable expression suitable
-for the person's MASTER Q avatar.
-
-Keep the person's recognizable facial character.
-
-Do not distort the mouth into an exaggerated cartoon expression.
-
-============================================================
-CRITICAL FULL-FRAME COMPOSITION
-============================================================
-
-NOTHING IMPORTANT MAY BE CROPPED.
-
-The ENTIRE hairstyle must remain visible.
-
-The highest point of the hair must be completely inside
-the square canvas.
-
-Leave approximately 10 to 15 percent clean background space
-above the hairstyle.
-
-Leave comfortable space on both sides.
-
-Keep fully visible:
-
-- complete hairstyle
-- complete top of head
-- both sides of hair
-- ears where naturally visible
-- full face
-- chin
-- neck
-- shoulders
-- upper body
-
-Nothing important may touch the canvas edge.
-
-ZOOM OUT when necessary.
-
-Center the character.
-
-============================================================
-STYLE
-============================================================
-
-Create a premium modern STAGYLIGHT Q-character illustration.
-
-Use:
-
-- clean digital artwork
-- polished smooth rendering
-- clean edges
-- controlled soft shading
-- cute but mature character design
-- high-quality avatar/sticker aesthetic
-- consistent professional illustration
-
-Do not make it photorealistic.
-
-Do not make it a generic anime character.
-
-Do not make it a baby.
-
-Do not add text.
-
-Do not add watermark.
-
-Do not add logos.
-
-Do not add another person.
-
-Do not create a collage.
-
-Do not create multiple versions.
-
-Use a simple clean neutral background.
-
-============================================================
-FINAL PRIORITY
-============================================================
-
-1. SAME PERSON / RECOGNIZABLE IDENTITY
-2. ADULT APPEARANCE
-3. SAME HAIRSTYLE
-4. CUTE CONTROLLED Q STYLE
-5. SAME CLOTHING / ACCESSORIES
-6. NO COSMETIC BLUSH OR UNWANTED MAKEUP
-7. FULL HAIR AND BODY ELEMENTS INSIDE FRAME
-8. PREMIUM STAGYLIGHT CHARACTER QUALITY
-
-The Q transformation must NEVER overpower identity.
-
-Do not invent a new Q character.
-
-Stylize the supplied Identity Master itself.
-
-Generate exactly ONE square Cute Adult Q Master.
-
-`;
-}
-
-
-// ================================================================
-// DURABLE OBJECT RESPONSE HELPER
-// ================================================================
 
 function controllerJson(
   data,
   status = 200
 ) {
-
   return new Response(
     JSON.stringify(data),
     {
-      status: status,
-
+      status,
       headers: {
-        "Content-Type":
-          "application/json"
+        "Content-Type": "application/json"
+      }
+    }
+  );
+}
+
+
+async function forward(response, cors) {
+  return new Response(
+    await response.text(),
+    {
+      status: response.status,
+      headers: {
+        ...cors,
+        "Content-Type": "application/json"
       }
     }
   );
