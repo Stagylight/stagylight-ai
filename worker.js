@@ -29,6 +29,27 @@ export default {
 
 
       // =========================================================
+      // STAGYLIGHT AI HEALTH CHECK
+      // FREE TEST - DOES NOT CALL FAL.AI
+      // =========================================================
+
+      if (body.action === "health_check") {
+
+        return json(
+          {
+            ok: true,
+            service: "STAGYLIGHT AI",
+            status: "connected",
+            message: "STAGYLIGHT AI Worker is connected and responding.",
+            fal_called: false
+          },
+          200,
+          cors
+        );
+      }
+
+
+      // =========================================================
       // BASIC Q-STICKER GENERATION
       // =========================================================
 
