@@ -27,72 +27,708 @@ export default {
 
       const body = await request.json();
 
+
       // =========================================================
-      // STAGYLIGHT ACCOUNT API
-      // D1 DATABASE: STAGYLIGHT_DB
+      // STAGYLIGHT ACCOUNT DATABASE TEST
       // =========================================================
 
       if (body.action === "account_test") {
 
-        if (!env.STAGYLIGHT_DB) {
+        requireDatabase(env);
+
+        const users =
+          await env.STAGYLIGHT_DB
+            .prepare(
+              "SELECT COUNT(*) AS total FROM users"
+            )
+            .first();
+
+        const sessions =
+          await env.STAGYLIGHT_DB
+            .prepare(
+              "SELECT COUNT(*) AS total FROM sessions"
+            )
+            .first();
+
+        return json(
+          {
+            ok: true,
+            service: "STAGYLIGHT Accounts",
+            database: "connected",
+            users: Number(users?.total || 0),
+            sessions: Number(sessions?.total || 0),
+            message:
+              "STAGYLIGHT account database is connected."
+          },
+          200,
+          cors
+        );
+      }
+
+
+      // =========================================================
+      // SIGN UP
+      // =========================================================
+
+      if (body.action === "signup") {
+
+        requireDatabase(env);
+
+        const email =
+          normalizeEmail(body.email);
+
+        const username =
+          normalizeUsername(body.username);
+
+        const displayName =
+          cleanText(body.display_name, 80);
+
+        const password =
+          String(body.password || "");
+
+        if (!isValidEmail(email)) {
           return json(
             {
               ok: false,
-              error: "STAGYLIGHT_DB binding is unavailable."
+              error: "Please enter a valid email address."
             },
-            500,
+            400,
             cors
           );
         }
+
+        if (!isValidUsername(username)) {
+          return json(
+            {
+              ok: false,
+              error:
+                "Username must be 3-30 characters and use only letters, numbers, dots or underscores."
+            },
+            400,
+            cors
+          );
+        }
+
+        if (!displayName) {
+          return json(
+            {
+              ok: false,
+              error: "Display name is required."
+            },
+            400,
+            cors
+          );
+        }
+
+        if (password.length < 8) {
+          return json(
+            {
+              ok: false,
+              error:
+                "Password must contain at least 8 characters."
+            },
+            400,
+            cors
+          );
+        }
+
+        if (password.length > 128) {
+          return json(
+            {
+              ok: false,
+              error: "Password is too long."
+            },
+            400,
+            cors
+          );
+        }
+
+
+        const existing =
+          await env.STAGYLIGHT_DB
+            .prepare(
+              `SELECT id, email, username
+               FROM users
+               WHERE lower(email) = ?
+                  OR lower(username) = ?
+               LIMIT 1`
+            )
+            .bind(
+              email,
+              username
+            )
+            .first();
+
+
+        if (existing) {
+
+          if (
+            String(existing.email || "")
+              .toLowerCase() === email
+          ) {
+            return json(
+              {
+                ok: false,
+                error:
+                  "An account already exists with this email."
+              },
+              409,
+              cors
+            );
+          }
+
+          return json(
+            {
+              ok: false,
+              error:
+                "This username is already taken."
+            },
+            409,
+            cors
+          );
+        }
+
+
+        const userId =
+          crypto.randomUUID();
+
+        const passwordHash =
+          await hashPassword(password);
+
+        const now =
+          new Date().toISOString();
+
 
         try {
 
-          const users =
-            await env.STAGYLIGHT_DB
-              .prepare(
-                "SELECT COUNT(*) AS total FROM users"
+          await env.STAGYLIGHT_DB
+            .prepare(
+              `INSERT INTO users (
+                id,
+                email,
+                username,
+                display_name,
+                password_hash,
+                auth_provider,
+                provider_user_id,
+                profile_image_url,
+                bio,
+                location,
+                languages,
+                availability,
+                created_at,
+                updated_at
               )
-              .first();
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+            )
+            .bind(
+              userId,
+              email,
+              username,
+              displayName,
+              passwordHash,
+              "email",
+              null,
+              cleanNullableText(
+                body.profile_image_url,
+                2000
+              ),
+              cleanNullableText(
+                body.bio,
+                500
+              ),
+              cleanNullableText(
+                body.location,
+                120
+              ),
+              cleanNullableText(
+                body.languages,
+                300
+              ),
+              cleanNullableText(
+                body.availability,
+                120
+              ),
+              now,
+              now
+            )
+            .run();
 
-          const sessions =
-            await env.STAGYLIGHT_DB
-              .prepare(
-                "SELECT COUNT(*) AS total FROM sessions"
-              )
-              .first();
+        } catch (e) {
 
-          return json(
-            {
-              ok: true,
-              service: "STAGYLIGHT Accounts",
-              database: "connected",
-              users_table: true,
-              sessions_table: true,
-              users: Number(users?.total || 0),
-              sessions: Number(sessions?.total || 0),
-              message:
-                "STAGYLIGHT account database is connected."
-            },
-            200,
-            cors
+          if (
+            String(e.message || "")
+              .toLowerCase()
+              .includes("unique")
+          ) {
+            return json(
+              {
+                ok: false,
+                error:
+                  "Email or username is already registered."
+              },
+              409,
+              cors
+            );
+          }
+
+          throw e;
+        }
+
+
+        const session =
+          await createSession(
+            env,
+            userId
           );
 
-        } catch (dbError) {
 
+        return json(
+          {
+            ok: true,
+            message:
+              "STAGYLIGHT account created.",
+            token: session.token,
+            expires_at:
+              session.expires_at,
+            user: {
+              id: userId,
+              email,
+              username,
+              display_name: displayName,
+              auth_provider: "email",
+              profile_image_url:
+                cleanNullableText(
+                  body.profile_image_url,
+                  2000
+                ),
+              bio:
+                cleanNullableText(
+                  body.bio,
+                  500
+                ),
+              location:
+                cleanNullableText(
+                  body.location,
+                  120
+                ),
+              languages:
+                cleanNullableText(
+                  body.languages,
+                  300
+                ),
+              availability:
+                cleanNullableText(
+                  body.availability,
+                  120
+                ),
+              created_at: now,
+              updated_at: now
+            }
+          },
+          201,
+          cors
+        );
+      }
+
+
+      // =========================================================
+      // LOGIN
+      // =========================================================
+
+      if (body.action === "login") {
+
+        requireDatabase(env);
+
+        const login =
+          String(
+            body.login ||
+            body.email ||
+            body.username ||
+            ""
+          )
+            .trim()
+            .toLowerCase();
+
+        const password =
+          String(body.password || "");
+
+
+        if (!login || !password) {
           return json(
             {
               ok: false,
-              error: "Database test failed.",
-              details: dbError.message
+              error:
+                "Email/username and password are required."
             },
-            500,
+            400,
             cors
           );
         }
+
+
+        const user =
+          await env.STAGYLIGHT_DB
+            .prepare(
+              `SELECT *
+               FROM users
+               WHERE lower(email) = ?
+                  OR lower(username) = ?
+               LIMIT 1`
+            )
+            .bind(
+              login,
+              login
+            )
+            .first();
+
+
+        if (
+          !user ||
+          !user.password_hash ||
+          user.auth_provider !== "email"
+        ) {
+          return json(
+            {
+              ok: false,
+              error:
+                "Incorrect email/username or password."
+            },
+            401,
+            cors
+          );
+        }
+
+
+        const valid =
+          await verifyPassword(
+            password,
+            user.password_hash
+          );
+
+
+        if (!valid) {
+          return json(
+            {
+              ok: false,
+              error:
+                "Incorrect email/username or password."
+            },
+            401,
+            cors
+          );
+        }
+
+
+        const session =
+          await createSession(
+            env,
+            user.id
+          );
+
+
+        return json(
+          {
+            ok: true,
+            message: "Login successful.",
+            token: session.token,
+            expires_at:
+              session.expires_at,
+            user: publicUser(user)
+          },
+          200,
+          cors
+        );
       }
+
+
+      // =========================================================
+      // CHECK SESSION
+      // =========================================================
+
+      if (
+        body.action === "check_session" ||
+        body.action === "get_account"
+      ) {
+
+        requireDatabase(env);
+
+        const session =
+          await authenticateSession(
+            env,
+            body.token
+          );
+
+
+        if (!session) {
+          return json(
+            {
+              ok: false,
+              authenticated: false,
+              error:
+                "Session is invalid or expired."
+            },
+            401,
+            cors
+          );
+        }
+
+
+        return json(
+          {
+            ok: true,
+            authenticated: true,
+            user:
+              publicUser(session.user),
+            expires_at:
+              session.expires_at
+          },
+          200,
+          cors
+        );
+      }
+
+
+      // =========================================================
+      // UPDATE PROFILE
+      // =========================================================
+
+      if (body.action === "update_profile") {
+
+        requireDatabase(env);
+
+        const session =
+          await authenticateSession(
+            env,
+            body.token
+          );
+
+
+        if (!session) {
+          return json(
+            {
+              ok: false,
+              error:
+                "Session is invalid or expired."
+            },
+            401,
+            cors
+          );
+        }
+
+
+        const current =
+          session.user;
+
+        const displayName =
+          body.display_name === undefined
+            ? current.display_name
+            : cleanText(
+                body.display_name,
+                80
+              );
+
+        if (!displayName) {
+          return json(
+            {
+              ok: false,
+              error:
+                "Display name cannot be empty."
+            },
+            400,
+            cors
+          );
+        }
+
+
+        let username =
+          current.username;
+
+        if (body.username !== undefined) {
+
+          username =
+            normalizeUsername(
+              body.username
+            );
+
+          if (!isValidUsername(username)) {
+            return json(
+              {
+                ok: false,
+                error:
+                  "Username must be 3-30 characters and use only letters, numbers, dots or underscores."
+              },
+              400,
+              cors
+            );
+          }
+
+
+          const taken =
+            await env.STAGYLIGHT_DB
+              .prepare(
+                `SELECT id
+                 FROM users
+                 WHERE lower(username) = ?
+                   AND id <> ?
+                 LIMIT 1`
+              )
+              .bind(
+                username,
+                current.id
+              )
+              .first();
+
+
+          if (taken) {
+            return json(
+              {
+                ok: false,
+                error:
+                  "This username is already taken."
+              },
+              409,
+              cors
+            );
+          }
+        }
+
+
+        const profileImage =
+          body.profile_image_url === undefined
+            ? current.profile_image_url
+            : cleanNullableText(
+                body.profile_image_url,
+                2000
+              );
+
+        const bio =
+          body.bio === undefined
+            ? current.bio
+            : cleanNullableText(
+                body.bio,
+                500
+              );
+
+        const location =
+          body.location === undefined
+            ? current.location
+            : cleanNullableText(
+                body.location,
+                120
+              );
+
+        const languages =
+          body.languages === undefined
+            ? current.languages
+            : cleanNullableText(
+                body.languages,
+                300
+              );
+
+        const availability =
+          body.availability === undefined
+            ? current.availability
+            : cleanNullableText(
+                body.availability,
+                120
+              );
+
+        const now =
+          new Date().toISOString();
+
+
+        await env.STAGYLIGHT_DB
+          .prepare(
+            `UPDATE users
+             SET username = ?,
+                 display_name = ?,
+                 profile_image_url = ?,
+                 bio = ?,
+                 location = ?,
+                 languages = ?,
+                 availability = ?,
+                 updated_at = ?
+             WHERE id = ?`
+          )
+          .bind(
+            username,
+            displayName,
+            profileImage,
+            bio,
+            location,
+            languages,
+            availability,
+            now,
+            current.id
+          )
+          .run();
+
+
+        const updated =
+          await env.STAGYLIGHT_DB
+            .prepare(
+              `SELECT *
+               FROM users
+               WHERE id = ?
+               LIMIT 1`
+            )
+            .bind(current.id)
+            .first();
+
+
+        return json(
+          {
+            ok: true,
+            message:
+              "Profile updated.",
+            user: publicUser(updated)
+          },
+          200,
+          cors
+        );
+      }
+
+
+      // =========================================================
+      // LOGOUT
+      // =========================================================
+
+      if (body.action === "logout") {
+
+        requireDatabase(env);
+
+        const token =
+          String(body.token || "");
+
+        if (token) {
+
+          const tokenHash =
+            await sha256Hex(token);
+
+          await env.STAGYLIGHT_DB
+            .prepare(
+              `DELETE FROM sessions
+               WHERE token_hash = ?`
+            )
+            .bind(tokenHash)
+            .run();
+        }
+
+
+        return json(
+          {
+            ok: true,
+            message: "Logged out."
+          },
+          200,
+          cors
+        );
+      }
+
+
       // =========================================================
       // STAGYLIGHT AI HEALTH CHECK
-      // FREE TEST - DOES NOT CALL FAL.AI
       // =========================================================
 
       if (body.action === "health_check") {
@@ -102,7 +738,8 @@ export default {
             ok: true,
             service: "STAGYLIGHT AI",
             status: "connected",
-            message: "STAGYLIGHT AI Worker is connected and responding.",
+            message:
+              "STAGYLIGHT AI Worker is connected and responding.",
             fal_called: false
           },
           200,
@@ -121,7 +758,8 @@ export default {
           return json(
             {
               ok: false,
-              error: "Missing Master Q image."
+              error:
+                "Missing Master Q image."
             },
             400,
             cors
@@ -129,7 +767,9 @@ export default {
         }
 
         const stickerType =
-          String(body.sticker_type || "").toLowerCase();
+          String(
+            body.sticker_type || ""
+          ).toLowerCase();
 
         const supportedStickers = [
           "hi",
@@ -140,29 +780,42 @@ export default {
           "goodnight"
         ];
 
-        if (!supportedStickers.includes(stickerType)) {
+        if (
+          !supportedStickers.includes(
+            stickerType
+          )
+        ) {
           return json(
             {
               ok: false,
-              error: "Unsupported sticker type."
+              error:
+                "Unsupported sticker type."
             },
             400,
             cors
           );
         }
 
-        const result = await submitFal(
-          env.FAL_KEY,
-          body.image_url,
-          getStickerPrompt(stickerType)
-        );
+        const result =
+          await submitFal(
+            env.FAL_KEY,
+            body.image_url,
+            getStickerPrompt(
+              stickerType
+            )
+          );
 
-        if (!result.ok || !result.data) {
+        if (
+          !result.ok ||
+          !result.data
+        ) {
           return json(
             {
               ok: false,
-              error: "Sticker generation submission failed.",
-              details: result.text
+              error:
+                "Sticker generation submission failed.",
+              details:
+                result.text
             },
             500,
             cors
@@ -172,11 +825,19 @@ export default {
         return json(
           {
             ok: true,
-            message: "Q-Sticker submitted.",
-            sticker_type: stickerType,
-            request_id: result.data.request_id || null,
-            status_url: result.data.status_url || null,
-            response_url: result.data.response_url || null
+            message:
+              "Q-Sticker submitted.",
+            sticker_type:
+              stickerType,
+            request_id:
+              result.data.request_id ||
+              null,
+            status_url:
+              result.data.status_url ||
+              null,
+            response_url:
+              result.data.response_url ||
+              null
           },
           200,
           cors
@@ -211,7 +872,8 @@ export default {
 
       if (body.action === "create_job") {
 
-        const jobId = crypto.randomUUID();
+        const jobId =
+          crypto.randomUUID();
 
         return forward(
           await controller(
@@ -222,7 +884,9 @@ export default {
               "create_job",
               {
                 job_id: jobId,
-                image_url: body.image_url || null
+                image_url:
+                  body.image_url ||
+                  null
               }
             )
           ),
@@ -245,7 +909,8 @@ export default {
           return json(
             {
               ok: false,
-              error: "Missing job_id."
+              error:
+                "Missing job_id."
             },
             400,
             cors
@@ -253,13 +918,15 @@ export default {
         }
 
         if (
-          body.action === "start_job" &&
+          body.action ===
+            "start_job" &&
           !body.image_url
         ) {
           return json(
             {
               ok: false,
-              error: "Missing image_url."
+              error:
+                "Missing image_url."
             },
             400,
             cors
@@ -290,14 +957,16 @@ export default {
         body.url
       ) {
 
-        const r = await fetch(
-          body.url,
-          {
-            headers: {
-              "Authorization": `Key ${env.FAL_KEY}`
+        const r =
+          await fetch(
+            body.url,
+            {
+              headers: {
+                "Authorization":
+                  `Key ${env.FAL_KEY}`
+              }
             }
-          }
-        );
+          );
 
         return new Response(
           await r.text(),
@@ -306,7 +975,9 @@ export default {
             headers: {
               ...cors,
               "Content-Type":
-                r.headers.get("Content-Type") ||
+                r.headers.get(
+                  "Content-Type"
+                ) ||
                 "application/json"
             }
           }
@@ -323,18 +994,20 @@ export default {
         return json(
           {
             ok: false,
-            error: "No reference image received."
+            error:
+              "No reference image received."
           },
           400,
           cors
         );
       }
 
-      const r = await submitFal(
-        env.FAL_KEY,
-        body.image_url,
-        getIdentityPrompt()
-      );
+      const r =
+        await submitFal(
+          env.FAL_KEY,
+          body.image_url,
+          getIdentityPrompt()
+        );
 
       return new Response(
         r.text,
@@ -342,7 +1015,8 @@ export default {
           status: r.status,
           headers: {
             ...cors,
-            "Content-Type": "application/json"
+            "Content-Type":
+              "application/json"
           }
         }
       );
@@ -352,7 +1026,9 @@ export default {
       return json(
         {
           ok: false,
-          error: e.message
+          error:
+            e.message ||
+            "Unexpected server error."
         },
         500,
         cors
@@ -377,53 +1053,68 @@ export class AIJobController {
 
     try {
 
-      const body = await request.json();
+      const body =
+        await request.json();
 
 
-      // =========================================================
-      // TEST
-      // =========================================================
-
-      if (body.action === "job_test") {
+      if (
+        body.action ===
+        "job_test"
+      ) {
 
         return controllerJson({
           ok: true,
-          controller: "AIJobController",
-          message: "STAGYLIGHT two-stage AI controller ready",
+          controller:
+            "AIJobController",
+          message:
+            "STAGYLIGHT two-stage AI controller ready",
           fal_called: false
         });
       }
 
 
-      // =========================================================
-      // CREATE JOB
-      // =========================================================
+      if (
+        body.action ===
+        "create_job"
+      ) {
 
-      if (body.action === "create_job") {
-
-        const now = new Date().toISOString();
+        const now =
+          new Date().toISOString();
 
         const job = {
 
-          job_id: body.job_id,
+          job_id:
+            body.job_id,
 
           status: "created",
 
           stage: "waiting",
 
-          source_image: body.image_url || null,
+          source_image:
+            body.image_url ||
+            null,
 
-          stage_1_status: "not_started",
-          stage_1_request_id: null,
-          stage_1_status_url: null,
-          stage_1_response_url: null,
-          stage_1_image: null,
+          stage_1_status:
+            "not_started",
+          stage_1_request_id:
+            null,
+          stage_1_status_url:
+            null,
+          stage_1_response_url:
+            null,
+          stage_1_image:
+            null,
 
-          stage_2_status: "not_started",
-          stage_2_request_id: null,
-          stage_2_status_url: null,
-          stage_2_response_url: null,
-          stage_2_image: null,
+          stage_2_status:
+            "not_started",
+          stage_2_request_id:
+            null,
+          stage_2_status_url:
+            null,
+          stage_2_response_url:
+            null,
+          stage_2_image:
+            null,
 
           final_image: null,
 
@@ -442,26 +1133,29 @@ export class AIJobController {
 
         return controllerJson({
           ok: true,
-          message: "STAGYLIGHT AI job created",
+          message:
+            "STAGYLIGHT AI job created",
           job
         });
       }
 
 
-      // =========================================================
-      // GET JOB
-      // =========================================================
-
-      if (body.action === "get_job") {
+      if (
+        body.action ===
+        "get_job"
+      ) {
 
         const job =
-          await this.ctx.storage.get("job");
+          await this.ctx.storage.get(
+            "job"
+          );
 
         if (!job) {
           return controllerJson(
             {
               ok: false,
-              error: "Job not found."
+              error:
+                "Job not found."
             },
             404
           );
@@ -474,20 +1168,22 @@ export class AIJobController {
       }
 
 
-      // =========================================================
-      // START STAGE 1
-      // =========================================================
-
-      if (body.action === "start_job") {
+      if (
+        body.action ===
+        "start_job"
+      ) {
 
         let job =
-          await this.ctx.storage.get("job");
+          await this.ctx.storage.get(
+            "job"
+          );
 
         if (!job) {
           return controllerJson(
             {
               ok: false,
-              error: "Job not found."
+              error:
+                "Job not found."
             },
             404
           );
@@ -497,38 +1193,41 @@ export class AIJobController {
           return controllerJson(
             {
               ok: false,
-              error: "Missing image_url."
+              error:
+                "Missing image_url."
             },
             400
           );
         }
 
-
-        // Prevent duplicate paid generation.
-
         if (
           job.stage_1_status !==
           "not_started"
         ) {
-
           return controllerJson({
             ok: true,
-            message: "Stage 1 already started.",
+            message:
+              "Stage 1 already started.",
             job
           });
         }
 
+        job.source_image =
+          body.image_url;
 
-        job.source_image = body.image_url;
-        job.status = "processing";
-        job.stage = "stage_1";
-        job.stage_1_status = "submitting";
+        job.status =
+          "processing";
+
+        job.stage =
+          "stage_1";
+
+        job.stage_1_status =
+          "submitting";
 
         await saveJob(
           this.ctx,
           job
         );
-
 
         const result =
           await submitFal(
@@ -537,14 +1236,16 @@ export class AIJobController {
             getIdentityPrompt()
           );
 
-
         if (
           !result.ok ||
           !result.data
         ) {
 
-          job.status = "error";
-          job.stage_1_status = "error";
+          job.status =
+            "error";
+
+          job.stage_1_status =
+            "error";
 
           job.error =
             result.text ||
@@ -558,73 +1259,83 @@ export class AIJobController {
           return controllerJson(
             {
               ok: false,
-              error: job.error,
+              error:
+                job.error,
               job
             },
             500
           );
         }
 
-
-        job.stage_1_status = "submitted";
+        job.stage_1_status =
+          "submitted";
 
         job.stage_1_request_id =
-          result.data.request_id || null;
+          result.data.request_id ||
+          null;
 
         job.stage_1_status_url =
-          result.data.status_url || null;
+          result.data.status_url ||
+          null;
 
         job.stage_1_response_url =
-          result.data.response_url || null;
+          result.data.response_url ||
+          null;
 
-        job.fal_called = true;
+        job.fal_called =
+          true;
 
         await saveJob(
           this.ctx,
           job
         );
 
-
         return controllerJson({
           ok: true,
-          message: "Stage 1 submitted.",
+          message:
+            "Stage 1 submitted.",
           job
         });
       }
 
 
-      // =========================================================
-      // ADVANCE JOB
-      // =========================================================
-
-      if (body.action === "advance_job") {
+      if (
+        body.action ===
+        "advance_job"
+      ) {
 
         let job =
-          await this.ctx.storage.get("job");
+          await this.ctx.storage.get(
+            "job"
+          );
 
         if (!job) {
           return controllerJson(
             {
               ok: false,
-              error: "Job not found."
+              error:
+                "Job not found."
             },
             404
           );
         }
 
-
-        if (job.status === "completed") {
-
+        if (
+          job.status ===
+          "completed"
+        ) {
           return controllerJson({
             ok: true,
-            message: "Q Master is ready.",
+            message:
+              "Q Master is ready.",
             job
           });
         }
 
-
-        if (job.status === "error") {
-
+        if (
+          job.status ===
+          "error"
+        ) {
           return controllerJson(
             {
               ok: false,
@@ -643,8 +1354,10 @@ export class AIJobController {
         // =======================================================
 
         if (
-          job.stage_1_status === "submitted" ||
-          job.stage_1_status === "processing"
+          job.stage_1_status ===
+            "submitted" ||
+          job.stage_1_status ===
+            "processing"
         ) {
 
           const check =
@@ -654,10 +1367,13 @@ export class AIJobController {
               this.env.FAL_KEY
             );
 
+          if (
+            check.state ===
+            "processing"
+          ) {
 
-          if (check.state === "processing") {
-
-            job.stage_1_status = "processing";
+            job.stage_1_status =
+              "processing";
 
             await saveJob(
               this.ctx,
@@ -666,17 +1382,25 @@ export class AIJobController {
 
             return controllerJson({
               ok: true,
-              message: "Stage 1 is processing.",
+              message:
+                "Stage 1 is processing.",
               job
             });
           }
 
+          if (
+            check.state ===
+            "error"
+          ) {
 
-          if (check.state === "error") {
+            job.status =
+              "error";
 
-            job.status = "error";
-            job.stage_1_status = "error";
-            job.error = check.error;
+            job.stage_1_status =
+              "error";
+
+            job.error =
+              check.error;
 
             await saveJob(
               this.ctx,
@@ -686,22 +1410,26 @@ export class AIJobController {
             return controllerJson(
               {
                 ok: false,
-                error: check.error,
+                error:
+                  check.error,
                 job
               },
               500
             );
           }
 
-
           const stage1Image =
-            extractImage(check.data);
-
+            extractImage(
+              check.data
+            );
 
           if (!stage1Image) {
 
-            job.status = "error";
-            job.stage_1_status = "error";
+            job.status =
+              "error";
+
+            job.stage_1_status =
+              "error";
 
             job.error =
               "Stage 1 completed but no image was returned.";
@@ -714,17 +1442,22 @@ export class AIJobController {
             return controllerJson(
               {
                 ok: false,
-                error: job.error,
+                error:
+                  job.error,
                 job
               },
               500
             );
           }
 
+          job.stage_1_status =
+            "completed";
 
-          job.stage_1_status = "completed";
-          job.stage_1_image = stage1Image;
-          job.stage = "stage_2";
+          job.stage_1_image =
+            stage1Image;
+
+          job.stage =
+            "stage_2";
 
           await saveJob(
             this.ctx,
@@ -738,18 +1471,22 @@ export class AIJobController {
         // =======================================================
 
         if (
-          job.stage_1_status === "completed" &&
-          job.stage_2_status === "not_started"
+          job.stage_1_status ===
+            "completed" &&
+          job.stage_2_status ===
+            "not_started"
         ) {
 
-          job.stage_2_status = "submitting";
-          job.stage = "stage_2";
+          job.stage_2_status =
+            "submitting";
+
+          job.stage =
+            "stage_2";
 
           await saveJob(
             this.ctx,
             job
           );
-
 
           const result =
             await submitFal(
@@ -758,14 +1495,16 @@ export class AIJobController {
               getQMasterPrompt()
             );
 
-
           if (
             !result.ok ||
             !result.data
           ) {
 
-            job.status = "error";
-            job.stage_2_status = "error";
+            job.status =
+              "error";
+
+            job.stage_2_status =
+              "error";
 
             job.error =
               result.text ||
@@ -779,30 +1518,33 @@ export class AIJobController {
             return controllerJson(
               {
                 ok: false,
-                error: job.error,
+                error:
+                  job.error,
                 job
               },
               500
             );
           }
 
-
-          job.stage_2_status = "submitted";
+          job.stage_2_status =
+            "submitted";
 
           job.stage_2_request_id =
-            result.data.request_id || null;
+            result.data.request_id ||
+            null;
 
           job.stage_2_status_url =
-            result.data.status_url || null;
+            result.data.status_url ||
+            null;
 
           job.stage_2_response_url =
-            result.data.response_url || null;
+            result.data.response_url ||
+            null;
 
           await saveJob(
             this.ctx,
             job
           );
-
 
           return controllerJson({
             ok: true,
@@ -818,8 +1560,10 @@ export class AIJobController {
         // =======================================================
 
         if (
-          job.stage_2_status === "submitted" ||
-          job.stage_2_status === "processing"
+          job.stage_2_status ===
+            "submitted" ||
+          job.stage_2_status ===
+            "processing"
         ) {
 
           const check =
@@ -829,10 +1573,13 @@ export class AIJobController {
               this.env.FAL_KEY
             );
 
+          if (
+            check.state ===
+            "processing"
+          ) {
 
-          if (check.state === "processing") {
-
-            job.stage_2_status = "processing";
+            job.stage_2_status =
+              "processing";
 
             await saveJob(
               this.ctx,
@@ -841,17 +1588,25 @@ export class AIJobController {
 
             return controllerJson({
               ok: true,
-              message: "Stage 2 is processing.",
+              message:
+                "Stage 2 is processing.",
               job
             });
           }
 
+          if (
+            check.state ===
+            "error"
+          ) {
 
-          if (check.state === "error") {
+            job.status =
+              "error";
 
-            job.status = "error";
-            job.stage_2_status = "error";
-            job.error = check.error;
+            job.stage_2_status =
+              "error";
+
+            job.error =
+              check.error;
 
             await saveJob(
               this.ctx,
@@ -861,22 +1616,26 @@ export class AIJobController {
             return controllerJson(
               {
                 ok: false,
-                error: check.error,
+                error:
+                  check.error,
                 job
               },
               500
             );
           }
 
-
           const finalImage =
-            extractImage(check.data);
-
+            extractImage(
+              check.data
+            );
 
           if (!finalImage) {
 
-            job.status = "error";
-            job.stage_2_status = "error";
+            job.status =
+              "error";
+
+            job.stage_2_status =
+              "error";
 
             job.error =
               "Stage 2 completed but no image was returned.";
@@ -889,27 +1648,36 @@ export class AIJobController {
             return controllerJson(
               {
                 ok: false,
-                error: job.error,
+                error:
+                  job.error,
                 job
               },
               500
             );
           }
 
+          job.stage_2_status =
+            "completed";
 
-          job.stage_2_status = "completed";
-          job.stage_2_image = finalImage;
-          job.final_image = finalImage;
+          job.stage_2_image =
+            finalImage;
 
-          job.status = "completed";
-          job.stage = "completed";
-          job.error = null;
+          job.final_image =
+            finalImage;
+
+          job.status =
+            "completed";
+
+          job.stage =
+            "completed";
+
+          job.error =
+            null;
 
           await saveJob(
             this.ctx,
             job
           );
-
 
           return controllerJson({
             ok: true,
@@ -919,10 +1687,10 @@ export class AIJobController {
           });
         }
 
-
         return controllerJson({
           ok: true,
-          message: "Job is waiting.",
+          message:
+            "Job is waiting.",
           job
         });
       }
@@ -942,12 +1710,546 @@ export class AIJobController {
       return controllerJson(
         {
           ok: false,
-          error: e.message
+          error:
+            e.message
         },
         500
       );
     }
   }
+}
+
+
+// ===============================================================
+// ACCOUNT HELPERS
+// ===============================================================
+
+function requireDatabase(env) {
+
+  if (!env.STAGYLIGHT_DB) {
+    throw new Error(
+      "STAGYLIGHT_DB binding is unavailable."
+    );
+  }
+}
+
+
+function normalizeEmail(value) {
+
+  return String(value || "")
+    .trim()
+    .toLowerCase();
+}
+
+
+function normalizeUsername(value) {
+
+  return String(value || "")
+    .trim()
+    .toLowerCase();
+}
+
+
+function isValidEmail(email) {
+
+  return (
+    email.length <= 254 &&
+    /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(
+      email
+    )
+  );
+}
+
+
+function isValidUsername(username) {
+
+  return (
+    username.length >= 3 &&
+    username.length <= 30 &&
+    /^[a-z0-9._]+$/.test(
+      username
+    )
+  );
+}
+
+
+function cleanText(
+  value,
+  maxLength
+) {
+
+  return String(value || "")
+    .trim()
+    .slice(0, maxLength);
+}
+
+
+function cleanNullableText(
+  value,
+  maxLength
+) {
+
+  if (
+    value === null ||
+    value === undefined
+  ) {
+    return null;
+  }
+
+  const cleaned =
+    String(value)
+      .trim()
+      .slice(0, maxLength);
+
+  return cleaned || null;
+}
+
+
+function publicUser(user) {
+
+  if (!user) {
+    return null;
+  }
+
+  return {
+    id: user.id,
+    email: user.email,
+    username: user.username,
+    display_name:
+      user.display_name,
+    auth_provider:
+      user.auth_provider,
+    profile_image_url:
+      user.profile_image_url ||
+      null,
+    bio:
+      user.bio || null,
+    location:
+      user.location || null,
+    languages:
+      user.languages || null,
+    availability:
+      user.availability || null,
+    created_at:
+      user.created_at,
+    updated_at:
+      user.updated_at
+  };
+}
+
+
+// ===============================================================
+// PASSWORD HASHING
+// PBKDF2-SHA256
+// ===============================================================
+
+const PASSWORD_ITERATIONS =
+  210000;
+
+async function hashPassword(
+  password
+) {
+
+  const salt =
+    crypto.getRandomValues(
+      new Uint8Array(16)
+    );
+
+  const hash =
+    await derivePassword(
+      password,
+      salt,
+      PASSWORD_ITERATIONS
+    );
+
+  return [
+    "pbkdf2_sha256",
+    PASSWORD_ITERATIONS,
+    bytesToBase64(salt),
+    bytesToBase64(hash)
+  ].join("$");
+}
+
+
+async function verifyPassword(
+  password,
+  stored
+) {
+
+  try {
+
+    const parts =
+      String(stored || "")
+        .split("$");
+
+    if (
+      parts.length !== 4 ||
+      parts[0] !==
+        "pbkdf2_sha256"
+    ) {
+      return false;
+    }
+
+    const iterations =
+      Number(parts[1]);
+
+    if (
+      !Number.isInteger(
+        iterations
+      ) ||
+      iterations < 100000 ||
+      iterations > 1000000
+    ) {
+      return false;
+    }
+
+    const salt =
+      base64ToBytes(
+        parts[2]
+      );
+
+    const expected =
+      base64ToBytes(
+        parts[3]
+      );
+
+    const actual =
+      await derivePassword(
+        password,
+        salt,
+        iterations
+      );
+
+    return constantTimeEqual(
+      actual,
+      expected
+    );
+
+  } catch (_) {
+
+    return false;
+  }
+}
+
+
+async function derivePassword(
+  password,
+  salt,
+  iterations
+) {
+
+  const encoder =
+    new TextEncoder();
+
+  const keyMaterial =
+    await crypto.subtle.importKey(
+      "raw",
+      encoder.encode(password),
+      {
+        name: "PBKDF2"
+      },
+      false,
+      [
+        "deriveBits"
+      ]
+    );
+
+  const bits =
+    await crypto.subtle.deriveBits(
+      {
+        name: "PBKDF2",
+        hash: "SHA-256",
+        salt,
+        iterations
+      },
+      keyMaterial,
+      256
+    );
+
+  return new Uint8Array(bits);
+}
+
+
+function constantTimeEqual(
+  a,
+  b
+) {
+
+  if (
+    !(a instanceof Uint8Array) ||
+    !(b instanceof Uint8Array)
+  ) {
+    return false;
+  }
+
+  if (a.length !== b.length) {
+    return false;
+  }
+
+  let difference = 0;
+
+  for (
+    let i = 0;
+    i < a.length;
+    i++
+  ) {
+    difference |=
+      a[i] ^ b[i];
+  }
+
+  return difference === 0;
+}
+
+
+// ===============================================================
+// SESSION MANAGEMENT
+// ===============================================================
+
+async function createSession(
+  env,
+  userId
+) {
+
+  const sessionId =
+    crypto.randomUUID();
+
+  const token =
+    randomToken(32);
+
+  const tokenHash =
+    await sha256Hex(token);
+
+  const createdAt =
+    new Date();
+
+  const expiresAt =
+    new Date(
+      createdAt.getTime() +
+      30 *
+      24 *
+      60 *
+      60 *
+      1000
+    );
+
+  await env.STAGYLIGHT_DB
+    .prepare(
+      `INSERT INTO sessions (
+        id,
+        user_id,
+        token_hash,
+        created_at,
+        expires_at
+      )
+      VALUES (?, ?, ?, ?, ?)`
+    )
+    .bind(
+      sessionId,
+      userId,
+      tokenHash,
+      createdAt.toISOString(),
+      expiresAt.toISOString()
+    )
+    .run();
+
+  return {
+    token,
+    expires_at:
+      expiresAt.toISOString()
+  };
+}
+
+
+async function authenticateSession(
+  env,
+  rawToken
+) {
+
+  const token =
+    String(rawToken || "");
+
+  if (!token) {
+    return null;
+  }
+
+  const tokenHash =
+    await sha256Hex(token);
+
+  const row =
+    await env.STAGYLIGHT_DB
+      .prepare(
+        `SELECT
+          s.id AS session_id,
+          s.user_id AS session_user_id,
+          s.expires_at AS session_expires_at,
+          u.*
+         FROM sessions s
+         JOIN users u
+           ON u.id = s.user_id
+         WHERE s.token_hash = ?
+         LIMIT 1`
+      )
+      .bind(tokenHash)
+      .first();
+
+  if (!row) {
+    return null;
+  }
+
+  const expires =
+    Date.parse(
+      row.session_expires_at
+    );
+
+  if (
+    !Number.isFinite(expires) ||
+    expires <= Date.now()
+  ) {
+
+    await env.STAGYLIGHT_DB
+      .prepare(
+        `DELETE FROM sessions
+         WHERE id = ?`
+      )
+      .bind(
+        row.session_id
+      )
+      .run();
+
+    return null;
+  }
+
+  const user = {
+    id: row.id,
+    email: row.email,
+    username: row.username,
+    display_name:
+      row.display_name,
+    password_hash:
+      row.password_hash,
+    auth_provider:
+      row.auth_provider,
+    provider_user_id:
+      row.provider_user_id,
+    profile_image_url:
+      row.profile_image_url,
+    bio: row.bio,
+    location: row.location,
+    languages: row.languages,
+    availability:
+      row.availability,
+    created_at:
+      row.created_at,
+    updated_at:
+      row.updated_at
+  };
+
+  return {
+    user,
+    expires_at:
+      row.session_expires_at
+  };
+}
+
+
+function randomToken(
+  byteLength
+) {
+
+  const bytes =
+    crypto.getRandomValues(
+      new Uint8Array(
+        byteLength
+      )
+    );
+
+  return bytesToBase64Url(
+    bytes
+  );
+}
+
+
+async function sha256Hex(
+  value
+) {
+
+  const bytes =
+    new TextEncoder()
+      .encode(value);
+
+  const digest =
+    await crypto.subtle.digest(
+      "SHA-256",
+      bytes
+    );
+
+  return Array.from(
+    new Uint8Array(digest)
+  )
+    .map(
+      b =>
+        b
+          .toString(16)
+          .padStart(2, "0")
+    )
+    .join("");
+}
+
+
+function bytesToBase64(
+  bytes
+) {
+
+  let binary = "";
+
+  for (
+    let i = 0;
+    i < bytes.length;
+    i++
+  ) {
+    binary +=
+      String.fromCharCode(
+        bytes[i]
+      );
+  }
+
+  return btoa(binary);
+}
+
+
+function base64ToBytes(
+  value
+) {
+
+  const binary =
+    atob(value);
+
+  const bytes =
+    new Uint8Array(
+      binary.length
+    );
+
+  for (
+    let i = 0;
+    i < binary.length;
+    i++
+  ) {
+    bytes[i] =
+      binary.charCodeAt(i);
+  }
+
+  return bytes;
+}
+
+
+function bytesToBase64Url(
+  bytes
+) {
+
+  return bytesToBase64(bytes)
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=+$/g, "");
 }
 
 
@@ -961,53 +2263,57 @@ async function submitFal(
   prompt
 ) {
 
-  const r = await fetch(
-    "https://queue.fal.run/fal-ai/gpt-image-1.5/edit",
-    {
-      method: "POST",
+  const r =
+    await fetch(
+      "https://queue.fal.run/fal-ai/gpt-image-1.5/edit",
+      {
+        method: "POST",
 
-      headers: {
-        "Authorization":
-          `Key ${falKey}`,
+        headers: {
+          "Authorization":
+            `Key ${falKey}`,
 
-        "Content-Type":
-          "application/json"
-      },
+          "Content-Type":
+            "application/json"
+        },
 
-      body: JSON.stringify({
+        body: JSON.stringify({
+          prompt,
 
-        prompt,
+          image_urls: [
+            imageUrl
+          ],
 
-        image_urls: [
-          imageUrl
-        ],
+          input_fidelity:
+            "high",
 
-        input_fidelity: "high",
+          image_size:
+            "1024x1024",
 
-        image_size: "1024x1024",
+          quality: "high",
 
-        quality: "high",
+          background:
+            "opaque",
 
-        background: "opaque",
+          num_images: 1,
 
-        num_images: 1,
+          output_format:
+            "png",
 
-        output_format: "png",
+          sync_mode: false
+        })
+      }
+    );
 
-        sync_mode: false
-      })
-    }
-  );
-
-
-  const text = await r.text();
+  const text =
+    await r.text();
 
   let data = null;
 
   try {
-    data = JSON.parse(text);
+    data =
+      JSON.parse(text);
   } catch (_) {}
-
 
   return {
     ok: r.ok,
@@ -1029,14 +2335,12 @@ async function checkFal(
 ) {
 
   if (!statusUrl) {
-
     return {
       state: "error",
       error:
         "Missing fal.ai status URL."
     };
   }
-
 
   const r =
     await fetch(
@@ -1049,15 +2353,15 @@ async function checkFal(
       }
     );
 
-
-  const text = await r.text();
+  const text =
+    await r.text();
 
   let data;
 
   try {
-    data = JSON.parse(text);
+    data =
+      JSON.parse(text);
   } catch (_) {
-
     return {
       state: "error",
       error:
@@ -1065,9 +2369,7 @@ async function checkFal(
     };
   }
 
-
   if (!r.ok) {
-
     return {
       state: "error",
       error:
@@ -1077,41 +2379,35 @@ async function checkFal(
     };
   }
 
-
   const status =
     String(
       data.status || ""
     ).toUpperCase();
 
-
   if (
     status === "IN_QUEUE" ||
     status === "IN_PROGRESS"
   ) {
-
     return {
       state: "processing"
     };
   }
 
-
-  if (status !== "COMPLETED") {
-
+  if (
+    status !== "COMPLETED"
+  ) {
     return {
       state: "processing"
     };
   }
-
 
   if (!responseUrl) {
-
     return {
       state: "error",
       error:
         "fal.ai completed but response URL is missing."
     };
   }
-
 
   const result =
     await fetch(
@@ -1124,19 +2420,17 @@ async function checkFal(
       }
     );
 
-
   const resultText =
     await result.text();
 
   let resultData;
 
   try {
-
     resultData =
-      JSON.parse(resultText);
-
+      JSON.parse(
+        resultText
+      );
   } catch (_) {
-
     return {
       state: "error",
       error:
@@ -1144,9 +2438,7 @@ async function checkFal(
     };
   }
 
-
   if (!result.ok) {
-
     return {
       state: "error",
       error:
@@ -1155,7 +2447,6 @@ async function checkFal(
         resultText
     };
   }
-
 
   return {
     state: "completed",
@@ -1549,11 +2840,9 @@ without text.
 `
   };
 
-
   const reaction =
     reactions[type] ||
     reactions.haha;
-
 
   return `
 
@@ -1756,7 +3045,7 @@ Generate exactly ONE square reaction Q-Sticker.
 
 
 // ===============================================================
-// HELPERS
+// AI HELPERS
 // ===============================================================
 
 function controller(
@@ -1764,21 +3053,21 @@ function controller(
   name
 ) {
 
-  if (!env.AI_JOB_CONTROLLER) {
-
+  if (
+    !env.AI_JOB_CONTROLLER
+  ) {
     throw new Error(
       "AI_JOB_CONTROLLER binding is unavailable."
     );
   }
 
   const id =
-    env.AI_JOB_CONTROLLER.idFromName(
-      name
-    );
+    env.AI_JOB_CONTROLLER
+      .idFromName(name);
 
-  return env.AI_JOB_CONTROLLER.get(
-    id
-  );
+  return env
+    .AI_JOB_CONTROLLER
+    .get(id);
 }
 
 
@@ -1788,12 +3077,14 @@ function internalRequest(
 ) {
 
   return new Request(
-    "https://stagylight.internal/" + action,
+    "https://stagylight.internal/" +
+      action,
     {
       method: "POST",
 
       headers: {
-        "Content-Type": "application/json"
+        "Content-Type":
+          "application/json"
       },
 
       body: JSON.stringify({
@@ -1811,7 +3102,8 @@ async function saveJob(
 ) {
 
   job.updated_at =
-    new Date().toISOString();
+    new Date()
+      .toISOString();
 
   await ctx.storage.put(
     "job",
@@ -1824,11 +3116,12 @@ function extractImage(data) {
 
   if (
     data &&
-    Array.isArray(data.images) &&
+    Array.isArray(
+      data.images
+    ) &&
     data.images.length > 0 &&
     data.images[0]?.url
   ) {
-
     return data.images[0].url;
   }
 
@@ -1884,7 +3177,8 @@ async function forward(
   return new Response(
     await response.text(),
     {
-      status: response.status,
+      status:
+        response.status,
 
       headers: {
         ...cors,
