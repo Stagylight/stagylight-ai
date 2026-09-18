@@ -1844,7 +1844,7 @@ function publicUser(user) {
 // ===============================================================
 
 const PASSWORD_ITERATIONS =
-  210000;
+  100000;
 
 async function hashPassword(
   password
