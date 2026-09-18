@@ -27,7 +27,69 @@ export default {
 
       const body = await request.json();
 
+      // =========================================================
+      // STAGYLIGHT ACCOUNT API
+      // D1 DATABASE: STAGYLIGHT_DB
+      // =========================================================
 
+      if (body.action === "account_test") {
+
+        if (!env.STAGYLIGHT_DB) {
+          return json(
+            {
+              ok: false,
+              error: "STAGYLIGHT_DB binding is unavailable."
+            },
+            500,
+            cors
+          );
+        }
+
+        try {
+
+          const users =
+            await env.STAGYLIGHT_DB
+              .prepare(
+                "SELECT COUNT(*) AS total FROM users"
+              )
+              .first();
+
+          const sessions =
+            await env.STAGYLIGHT_DB
+              .prepare(
+                "SELECT COUNT(*) AS total FROM sessions"
+              )
+              .first();
+
+          return json(
+            {
+              ok: true,
+              service: "STAGYLIGHT Accounts",
+              database: "connected",
+              users_table: true,
+              sessions_table: true,
+              users: Number(users?.total || 0),
+              sessions: Number(sessions?.total || 0),
+              message:
+                "STAGYLIGHT account database is connected."
+            },
+            200,
+            cors
+          );
+
+        } catch (dbError) {
+
+          return json(
+            {
+              ok: false,
+              error: "Database test failed.",
+              details: dbError.message
+            },
+            500,
+            cors
+          );
+        }
+      }
       // =========================================================
       // STAGYLIGHT AI HEALTH CHECK
       // FREE TEST - DOES NOT CALL FAL.AI
