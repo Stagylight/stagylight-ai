@@ -4,6 +4,14 @@
   "main": "worker.js",
   "compatibility_date": "2026-09-15",
 
+  "d1_databases": [
+    {
+      "binding": "STAGYLIGHT_DB",
+      "database_name": "stagylight-db",
+      "database_id": "775c61b5-b1d2-45b4-b638-9e9c848e09f4"
+    }
+  ],
+
   "durable_objects": {
     "bindings": [
       {
