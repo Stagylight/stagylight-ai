@@ -774,11 +774,6 @@ export default {
             .toLowerCase();
 
 
-        /*
-         * Compatibility:
-         * Existing Android code maps Happy -> haha.
-         * Both "happy" and "haha" therefore work.
-         */
         if (stickerType === "happy") {
           stickerType = "haha";
         }
@@ -825,11 +820,26 @@ export default {
           !result.ok ||
           !result.data
         ) {
+
+          console.error(
+            "Q-STICKER FAL ERROR",
+            JSON.stringify({
+              sticker_type:
+                stickerType,
+              fal_status:
+                result.status,
+              fal_response:
+                result.text
+            })
+          );
+
           return json(
             {
               ok: false,
               error:
                 "Sticker generation submission failed.",
+              fal_status:
+                result.status,
               details:
                 result.text
             },
@@ -1366,10 +1376,6 @@ export class AIJobController {
         }
 
 
-        // =======================================================
-        // CHECK STAGE 1
-        // =======================================================
-
         if (
           job.stage_1_status ===
             "submitted" ||
@@ -1483,10 +1489,6 @@ export class AIJobController {
         }
 
 
-        // =======================================================
-        // SUBMIT STAGE 2
-        // =======================================================
-
         if (
           job.stage_1_status ===
             "completed" &&
@@ -1571,10 +1573,6 @@ export class AIJobController {
           });
         }
 
-
-        // =======================================================
-        // CHECK STAGE 2
-        // =======================================================
 
         if (
           job.stage_2_status ===
@@ -1857,7 +1855,6 @@ function publicUser(user) {
 
 // ===============================================================
 // PASSWORD HASHING
-// PBKDF2-SHA256
 // ===============================================================
 
 const PASSWORD_ITERATIONS =
@@ -2474,7 +2471,6 @@ async function checkFal(
 
 // ===============================================================
 // STAGE 1
-// HUMAN PHOTO -> IDENTITY MASTER
 // ===============================================================
 
 function getIdentityPrompt() {
@@ -2571,7 +2567,6 @@ Generate exactly ONE square portrait.
 
 // ===============================================================
 // STAGE 2
-// IDENTITY MASTER -> ADULT Q MASTER
 // ===============================================================
 
 function getQMasterPrompt() {
