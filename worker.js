@@ -749,7 +749,7 @@ export default {
 
 
       // =========================================================
-      // BASIC Q-STICKER GENERATION
+      // Q-STICKER GENERATION
       // =========================================================
 
       if (body.action === "create_sticker") {
@@ -766,19 +766,33 @@ export default {
           );
         }
 
-        const stickerType =
+        let stickerType =
           String(
             body.sticker_type || ""
-          ).toLowerCase();
+          )
+            .trim()
+            .toLowerCase();
+
+
+        /*
+         * Compatibility:
+         * Existing Android code maps Happy -> haha.
+         * Both "happy" and "haha" therefore work.
+         */
+        if (stickerType === "happy") {
+          stickerType = "haha";
+        }
+
 
         const supportedStickers = [
-          "hi",
           "haha",
           "love",
-          "thankyou",
           "sad",
-          "goodnight"
+          "angry",
+          "like",
+          "celebrate"
         ];
+
 
         if (
           !supportedStickers.includes(
@@ -796,6 +810,7 @@ export default {
           );
         }
 
+
         const result =
           await submitFal(
             env.FAL_KEY,
@@ -804,6 +819,7 @@ export default {
               stickerType
             )
           );
+
 
         if (
           !result.ok ||
@@ -821,6 +837,7 @@ export default {
             cors
           );
         }
+
 
         return json(
           {
@@ -2728,43 +2745,28 @@ Generate exactly ONE square Adult Q Master.
 
 
 // ===============================================================
-// BASIC Q-STICKER PROMPTS
+// Q-STICKER PROMPTS
 // ===============================================================
 
 function getStickerPrompt(type) {
 
   const reactions = {
 
-    hi: `
-HI / GREETING REACTION 👋
-
-Create a warm, friendly greeting.
-
-The character is smiling naturally and raising ONE hand
-in a clear friendly waving gesture.
-
-Expression:
-pleasant, welcoming, confident and cheerful.
-
-Do not exaggerate the smile or eyes.
-
-The result should clearly communicate "Hi!" without using text.
-`,
-
     haha: `
-HAHA / LAUGHING REACTION 😂
+HAPPY / LAUGHING REACTION 😂
 
-Create a genuinely joyful laughing expression.
+Create a genuinely joyful and happy laughing expression.
 
-Use a natural open smile or laugh, happy eyes and a playful
+Use a natural open smile or laugh, cheerful eyes and a playful
 upper-body reaction.
 
-The character should look strongly amused and cheerful.
+The character should look strongly amused, energetic and happy.
 
-Do not create huge anime eyes or distort the mouth beyond
-recognition.
+Do not create huge anime eyes.
+Do not distort the mouth beyond recognition.
+Do not change the person's identity.
 
-The result should clearly communicate laughter without text.
+The result must clearly communicate HAPPY / LAUGHTER without text.
 `,
 
     love: `
@@ -2774,75 +2776,115 @@ Create a sweet, warm and affectionate reaction.
 
 Use a gentle happy smile.
 
-The character may form a small heart gesture using the hands
-or hold both hands naturally near the chest.
+The character should form a clear small HEART gesture using
+the hands near the chest.
 
-The expression should communicate affection and appreciation.
+The pose should communicate love, affection and appreciation.
 
-Keep it mature and natural.
+Keep the face mature and natural.
 
-Do NOT add romantic makeup, blush or exaggerated pink cheeks.
+Do NOT add romantic makeup, lipstick, blush or exaggerated
+pink cheeks.
 
-The result should clearly communicate love without text.
-`,
-
-    thankyou: `
-THANK YOU / GRATITUDE REACTION 🙏
-
-Create a sincere grateful expression.
-
-Use a warm natural smile.
-
-Place the hands together respectfully in front of the chest
-in a clear gratitude / thank-you gesture.
-
-Keep the pose friendly, natural and mature.
-
-The result should clearly communicate gratitude without text.
+The result must clearly communicate LOVE without text.
 `,
 
     sad: `
-SAD / UPSET REACTION 😢
+SAD / UPSET REACTION 😭
 
-Create a clearly sad and emotionally disappointed expression.
+Create a clearly sad and emotionally upset expression.
 
 The mouth may turn slightly downward.
 
 The eyes should look naturally sad and emotional.
 
-A small natural tear is allowed.
+Small natural tears are allowed so the emotion is immediately
+understandable.
 
 Do NOT enlarge the eyes.
-Do NOT create giant cartoon tears.
-Do NOT turn the face into a different character.
+Do NOT create giant cartoon eyes.
+Do NOT distort the face.
+Do NOT turn the person into a different character.
 
-Keep the sadness believable, gentle and recognizable.
+Keep the sadness believable while preserving identity.
 
-The result should clearly communicate sadness without text.
+The result must clearly communicate SADNESS without text.
 `,
 
-    goodnight: `
-GOOD NIGHT / SLEEPY REACTION 🌙
+    angry: `
+ANGRY / FRUSTRATED REACTION 😡
 
-Create a peaceful, sleepy good-night reaction.
+Create a clearly angry and frustrated expression.
 
-Use relaxed or gently closed eyes and a calm soft expression.
+Use naturally lowered or slightly furrowed eyebrows,
+a serious tense mouth and a confident irritated pose.
 
-The character may rest the side of the face naturally against
-joined hands in a sleeping gesture.
+The character may use a naturally clenched fist near the body,
+but the pose must remain non-violent and suitable for a social
+reaction sticker.
 
-Keep the same hairstyle and clothing clearly recognizable.
+Do NOT make the face monstrous.
+Do NOT add glowing eyes.
+Do NOT add flames.
+Do NOT distort the face.
+Do NOT change the person's identity.
 
-Do NOT add nightwear or redesign the outfit.
+Keep the same adult face, hairstyle and clothing.
 
-The result should clearly communicate good night / sleep
+The result must clearly communicate ANGER / FRUSTRATION
+without text.
+`,
+
+    like: `
+LIKE / APPROVAL REACTION 👍
+
+Create a positive, confident approval reaction.
+
+The character should display ONE clear thumbs-up gesture.
+
+Use a friendly natural smile and confident happy expression.
+
+The thumb and hand must be anatomically clear and remain
+completely inside the frame.
+
+Do NOT exaggerate the eyes or facial proportions.
+Do NOT change the person's identity.
+
+The result must clearly communicate LIKE / APPROVAL
+without text.
+`,
+
+    celebrate: `
+CELEBRATE / EXCITED REACTION 🎉
+
+Create a joyful, energetic celebration reaction.
+
+The character should look excited and genuinely happy.
+
+Use an enthusiastic smile and celebratory upper-body pose.
+
+The character may raise both hands in celebration.
+
+Add a SMALL amount of tasteful celebratory confetti around
+the character.
+
+Keep the face fully visible and recognizable.
+
+Do NOT cover the face with confetti.
+Do NOT add written text.
+Do NOT redesign the clothing.
+Do NOT distort the person's identity.
+
+The result must clearly communicate CELEBRATION / SUCCESS
 without text.
 `
   };
 
+
   const reaction =
     reactions[type] ||
     reactions.haha;
+
 
   return `
 
@@ -3002,7 +3044,8 @@ Do NOT crop the top of the hair.
 Show enough neck, shoulders, arms and upper body to clearly
 display the reaction gesture when needed.
 
-Keep all important hands and gestures inside the frame.
+Keep all important hands and gestures completely inside
+the frame.
 
 Center the character.
 
