@@ -806,13 +806,16 @@ export default {
         }
 
 
+        // Q-STICKERS USE MEDIUM QUALITY FOR FASTER GENERATION.
+        // MY Q GENERATION REMAINS HIGH QUALITY.
         const result =
           await submitFal(
             env.FAL_KEY,
             body.image_url,
             getStickerPrompt(
               stickerType
-            )
+            ),
+            "medium"
           );
 
 
@@ -2274,7 +2277,8 @@ function bytesToBase64Url(
 async function submitFal(
   falKey,
   imageUrl,
-  prompt
+  prompt,
+  quality = "high"
 ) {
 
   const r =
@@ -2304,7 +2308,7 @@ async function submitFal(
           image_size:
             "1024x1024",
 
-          quality: "high",
+          quality: quality,
 
           background:
             "opaque",
