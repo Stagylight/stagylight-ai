@@ -143,7 +143,6 @@ export default {
           );
         }
 
-
         const existing =
           await env.STAGYLIGHT_DB
             .prepare(
@@ -153,12 +152,8 @@ export default {
                   OR lower(username) = ?
                LIMIT 1`
             )
-            .bind(
-              email,
-              username
-            )
+            .bind(email, username)
             .first();
-
 
         if (existing) {
 
@@ -188,7 +183,6 @@ export default {
           );
         }
 
-
         const userId =
           crypto.randomUUID();
 
@@ -197,7 +191,6 @@ export default {
 
         const now =
           new Date().toISOString();
-
 
         try {
 
@@ -275,13 +268,11 @@ export default {
           throw e;
         }
 
-
         const session =
           await createSession(
             env,
             userId
           );
-
 
         return json(
           {
@@ -353,7 +344,6 @@ export default {
         const password =
           String(body.password || "");
 
-
         if (!login || !password) {
           return json(
             {
@@ -366,7 +356,6 @@ export default {
           );
         }
 
-
         const user =
           await env.STAGYLIGHT_DB
             .prepare(
@@ -376,12 +365,8 @@ export default {
                   OR lower(username) = ?
                LIMIT 1`
             )
-            .bind(
-              login,
-              login
-            )
+            .bind(login, login)
             .first();
-
 
         if (
           !user ||
@@ -399,13 +384,11 @@ export default {
           );
         }
 
-
         const valid =
           await verifyPassword(
             password,
             user.password_hash
           );
-
 
         if (!valid) {
           return json(
@@ -419,13 +402,11 @@ export default {
           );
         }
 
-
         const session =
           await createSession(
             env,
             user.id
           );
-
 
         return json(
           {
@@ -459,7 +440,6 @@ export default {
             body.token
           );
 
-
         if (!session) {
           return json(
             {
@@ -472,7 +452,6 @@ export default {
             cors
           );
         }
-
 
         return json(
           {
@@ -503,7 +482,6 @@ export default {
             body.token
           );
 
-
         if (!session) {
           return json(
             {
@@ -515,7 +493,6 @@ export default {
             cors
           );
         }
-
 
         const current =
           session.user;
@@ -540,7 +517,6 @@ export default {
           );
         }
 
-
         let username =
           current.username;
 
@@ -563,7 +539,6 @@ export default {
             );
           }
 
-
           const taken =
             await env.STAGYLIGHT_DB
               .prepare(
@@ -579,7 +554,6 @@ export default {
               )
               .first();
 
-
           if (taken) {
             return json(
               {
@@ -592,7 +566,6 @@ export default {
             );
           }
         }
-
 
         const profileImage =
           body.profile_image_url === undefined
@@ -637,7 +610,6 @@ export default {
         const now =
           new Date().toISOString();
 
-
         await env.STAGYLIGHT_DB
           .prepare(
             `UPDATE users
@@ -664,7 +636,6 @@ export default {
           )
           .run();
 
-
         const updated =
           await env.STAGYLIGHT_DB
             .prepare(
@@ -675,7 +646,6 @@ export default {
             )
             .bind(current.id)
             .first();
-
 
         return json(
           {
@@ -715,11 +685,865 @@ export default {
             .run();
         }
 
-
         return json(
           {
             ok: true,
             message: "Logged out."
+          },
+          200,
+          cors
+        );
+      }
+
+
+      // =========================================================
+      // SOCIAL DATABASE
+      // =========================================================
+
+      if (body.action === "social_setup") {
+
+        requireDatabase(env);
+
+        await ensureSocialTables(env);
+
+        return json(
+          {
+            ok: true,
+            message:
+              "STAGYLIGHT social database is ready."
+          },
+          200,
+          cors
+        );
+      }
+
+
+      // =========================================================
+      // FOLLOW USER
+      // =========================================================
+
+      if (body.action === "follow_user") {
+
+        requireDatabase(env);
+        await ensureSocialTables(env);
+
+        const session =
+          await authenticateSession(
+            env,
+            body.token
+          );
+
+        if (!session) {
+          return json(
+            {
+              ok: false,
+              error:
+                "Session is invalid or expired."
+            },
+            401,
+            cors
+          );
+        }
+
+        const target =
+          await findTargetUser(
+            env,
+            body
+          );
+
+        if (!target) {
+          return json(
+            {
+              ok: false,
+              error:
+                "User not found."
+            },
+            404,
+            cors
+          );
+        }
+
+        if (
+          target.id ===
+          session.user.id
+        ) {
+          return json(
+            {
+              ok: false,
+              error:
+                "You cannot follow yourself."
+            },
+            400,
+            cors
+          );
+        }
+
+        const existing =
+          await env.STAGYLIGHT_DB
+            .prepare(
+              `SELECT id
+               FROM social_follows
+               WHERE follower_user_id = ?
+                 AND following_user_id = ?
+               LIMIT 1`
+            )
+            .bind(
+              session.user.id,
+              target.id
+            )
+            .first();
+
+        let created = false;
+
+        if (!existing) {
+
+          const now =
+            new Date().toISOString();
+
+          await env.STAGYLIGHT_DB
+            .prepare(
+              `INSERT INTO social_follows (
+                id,
+                follower_user_id,
+                following_user_id,
+                created_at
+              )
+              VALUES (?, ?, ?, ?)`
+            )
+            .bind(
+              crypto.randomUUID(),
+              session.user.id,
+              target.id,
+              now
+            )
+            .run();
+
+          await createSocialNotification(
+            env,
+            {
+              targetUserId:
+                target.id,
+              actorUserId:
+                session.user.id,
+              type: "follow",
+              postId: null,
+              message:
+                `${session.user.display_name || session.user.username} followed you.`,
+              createdAt: now
+            }
+          );
+
+          created = true;
+        }
+
+        const counts =
+          await getFollowCounts(
+            env,
+            target.id
+          );
+
+        return json(
+          {
+            ok: true,
+            following: true,
+            created,
+            target_user:
+              publicUser(target),
+            followers:
+              counts.followers,
+            following_count:
+              counts.following
+          },
+          200,
+          cors
+        );
+      }
+
+
+      // =========================================================
+      // UNFOLLOW USER
+      // =========================================================
+
+      if (body.action === "unfollow_user") {
+
+        requireDatabase(env);
+        await ensureSocialTables(env);
+
+        const session =
+          await authenticateSession(
+            env,
+            body.token
+          );
+
+        if (!session) {
+          return json(
+            {
+              ok: false,
+              error:
+                "Session is invalid or expired."
+            },
+            401,
+            cors
+          );
+        }
+
+        const target =
+          await findTargetUser(
+            env,
+            body
+          );
+
+        if (!target) {
+          return json(
+            {
+              ok: false,
+              error:
+                "User not found."
+            },
+            404,
+            cors
+          );
+        }
+
+        await env.STAGYLIGHT_DB
+          .prepare(
+            `DELETE FROM social_follows
+             WHERE follower_user_id = ?
+               AND following_user_id = ?`
+          )
+          .bind(
+            session.user.id,
+            target.id
+          )
+          .run();
+
+        const counts =
+          await getFollowCounts(
+            env,
+            target.id
+          );
+
+        return json(
+          {
+            ok: true,
+            following: false,
+            target_user:
+              publicUser(target),
+            followers:
+              counts.followers,
+            following_count:
+              counts.following
+          },
+          200,
+          cors
+        );
+      }
+
+
+      // =========================================================
+      // FOLLOW STATUS
+      // =========================================================
+
+      if (body.action === "get_follow_status") {
+
+        requireDatabase(env);
+        await ensureSocialTables(env);
+
+        const session =
+          await authenticateSession(
+            env,
+            body.token
+          );
+
+        if (!session) {
+          return json(
+            {
+              ok: false,
+              error:
+                "Session is invalid or expired."
+            },
+            401,
+            cors
+          );
+        }
+
+        const target =
+          await findTargetUser(
+            env,
+            body
+          );
+
+        if (!target) {
+          return json(
+            {
+              ok: false,
+              error:
+                "User not found."
+            },
+            404,
+            cors
+          );
+        }
+
+        const relation =
+          await env.STAGYLIGHT_DB
+            .prepare(
+              `SELECT id
+               FROM social_follows
+               WHERE follower_user_id = ?
+                 AND following_user_id = ?
+               LIMIT 1`
+            )
+            .bind(
+              session.user.id,
+              target.id
+            )
+            .first();
+
+        const counts =
+          await getFollowCounts(
+            env,
+            target.id
+          );
+
+        return json(
+          {
+            ok: true,
+            following:
+              Boolean(relation),
+            is_self:
+              target.id ===
+              session.user.id,
+            followers:
+              counts.followers,
+            following_count:
+              counts.following,
+            target_user:
+              publicUser(target)
+          },
+          200,
+          cors
+        );
+      }
+
+
+      // =========================================================
+      // GET FOLLOW COUNTS
+      // =========================================================
+
+      if (body.action === "get_follow_counts") {
+
+        requireDatabase(env);
+        await ensureSocialTables(env);
+
+        let target = null;
+
+        if (
+          body.user_id ||
+          body.target_user_id ||
+          body.username ||
+          body.target_username
+        ) {
+          target =
+            await findTargetUser(
+              env,
+              body
+            );
+        } else {
+
+          const session =
+            await authenticateSession(
+              env,
+              body.token
+            );
+
+          if (session) {
+            target =
+              session.user;
+          }
+        }
+
+        if (!target) {
+          return json(
+            {
+              ok: false,
+              error:
+                "User not found."
+            },
+            404,
+            cors
+          );
+        }
+
+        const counts =
+          await getFollowCounts(
+            env,
+            target.id
+          );
+
+        return json(
+          {
+            ok: true,
+            user_id:
+              target.id,
+            username:
+              target.username,
+            followers:
+              counts.followers,
+            following:
+              counts.following
+          },
+          200,
+          cors
+        );
+      }
+
+
+      // =========================================================
+      // CREATE SOCIAL NOTIFICATION
+      // LIKE / COMMENT / SHARE
+      // =========================================================
+
+      if (body.action === "create_notification") {
+
+        requireDatabase(env);
+        await ensureSocialTables(env);
+
+        const session =
+          await authenticateSession(
+            env,
+            body.token
+          );
+
+        if (!session) {
+          return json(
+            {
+              ok: false,
+              error:
+                "Session is invalid or expired."
+            },
+            401,
+            cors
+          );
+        }
+
+        const type =
+          String(
+            body.type ||
+            body.notification_type ||
+            ""
+          )
+            .trim()
+            .toLowerCase();
+
+        const supportedTypes = [
+          "like",
+          "comment",
+          "share",
+          "message"
+        ];
+
+        if (
+          !supportedTypes.includes(
+            type
+          )
+        ) {
+          return json(
+            {
+              ok: false,
+              error:
+                "Unsupported notification type."
+            },
+            400,
+            cors
+          );
+        }
+
+        const target =
+          await findTargetUser(
+            env,
+            body
+          );
+
+        if (!target) {
+          return json(
+            {
+              ok: false,
+              error:
+                "Notification target user not found."
+            },
+            404,
+            cors
+          );
+        }
+
+        if (
+          target.id ===
+          session.user.id
+        ) {
+          return json(
+            {
+              ok: true,
+              skipped: true,
+              message:
+                "Self notification skipped."
+            },
+            200,
+            cors
+          );
+        }
+
+        const postId =
+          cleanNullableText(
+            body.post_id ||
+            body.postId,
+            300
+          );
+
+        const message =
+          cleanNullableText(
+            body.message,
+            500
+          ) ||
+          defaultNotificationMessage(
+            type,
+            session.user
+          );
+
+        const notification =
+          await createSocialNotification(
+            env,
+            {
+              targetUserId:
+                target.id,
+              actorUserId:
+                session.user.id,
+              type,
+              postId,
+              message,
+              createdAt:
+                new Date().toISOString()
+            }
+          );
+
+        return json(
+          {
+            ok: true,
+            message:
+              "Notification created.",
+            notification
+          },
+          201,
+          cors
+        );
+      }
+
+
+      // =========================================================
+      // GET NOTIFICATIONS
+      // =========================================================
+
+      if (body.action === "get_notifications") {
+
+        requireDatabase(env);
+        await ensureSocialTables(env);
+
+        const session =
+          await authenticateSession(
+            env,
+            body.token
+          );
+
+        if (!session) {
+          return json(
+            {
+              ok: false,
+              error:
+                "Session is invalid or expired."
+            },
+            401,
+            cors
+          );
+        }
+
+        let limit =
+          Number(body.limit || 100);
+
+        if (
+          !Number.isFinite(limit) ||
+          limit < 1
+        ) {
+          limit = 100;
+        }
+
+        limit =
+          Math.min(
+            Math.floor(limit),
+            200
+          );
+
+        const result =
+          await env.STAGYLIGHT_DB
+            .prepare(
+              `SELECT
+                n.id,
+                n.target_user_id,
+                n.actor_user_id,
+                n.type,
+                n.post_id,
+                n.message,
+                n.is_read,
+                n.created_at,
+                u.username AS actor_username,
+                u.display_name AS actor_display_name,
+                u.profile_image_url AS actor_profile_image_url
+               FROM social_notifications n
+               LEFT JOIN users u
+                 ON u.id = n.actor_user_id
+               WHERE n.target_user_id = ?
+               ORDER BY n.created_at DESC
+               LIMIT ?`
+            )
+            .bind(
+              session.user.id,
+              limit
+            )
+            .all();
+
+        const notifications =
+          (result.results || [])
+            .map(
+              row => ({
+                id: row.id,
+                target_user_id:
+                  row.target_user_id,
+                actor_user_id:
+                  row.actor_user_id,
+                actor_username:
+                  row.actor_username ||
+                  "",
+                actor_display_name:
+                  row.actor_display_name ||
+                  row.actor_username ||
+                  "STAGYLIGHT User",
+                actor_profile_image_url:
+                  row.actor_profile_image_url ||
+                  null,
+                type:
+                  row.type,
+                post_id:
+                  row.post_id ||
+                  null,
+                message:
+                  row.message ||
+                  "",
+                is_read:
+                  Number(
+                    row.is_read || 0
+                  ) === 1,
+                created_at:
+                  row.created_at
+              })
+            );
+
+        const unread =
+          notifications.filter(
+            item => !item.is_read
+          ).length;
+
+        return json(
+          {
+            ok: true,
+            notifications,
+            total:
+              notifications.length,
+            unread
+          },
+          200,
+          cors
+        );
+      }
+
+
+      // =========================================================
+      // GET UNREAD NOTIFICATION COUNT
+      // =========================================================
+
+      if (
+        body.action ===
+        "get_notification_count"
+      ) {
+
+        requireDatabase(env);
+        await ensureSocialTables(env);
+
+        const session =
+          await authenticateSession(
+            env,
+            body.token
+          );
+
+        if (!session) {
+          return json(
+            {
+              ok: false,
+              error:
+                "Session is invalid or expired."
+            },
+            401,
+            cors
+          );
+        }
+
+        const row =
+          await env.STAGYLIGHT_DB
+            .prepare(
+              `SELECT COUNT(*) AS total
+               FROM social_notifications
+               WHERE target_user_id = ?
+                 AND is_read = 0`
+            )
+            .bind(
+              session.user.id
+            )
+            .first();
+
+        return json(
+          {
+            ok: true,
+            unread:
+              Number(
+                row?.total || 0
+              )
+          },
+          200,
+          cors
+        );
+      }
+
+
+      // =========================================================
+      // MARK ONE NOTIFICATION READ
+      // =========================================================
+
+      if (
+        body.action ===
+        "mark_notification_read"
+      ) {
+
+        requireDatabase(env);
+        await ensureSocialTables(env);
+
+        const session =
+          await authenticateSession(
+            env,
+            body.token
+          );
+
+        if (!session) {
+          return json(
+            {
+              ok: false,
+              error:
+                "Session is invalid or expired."
+            },
+            401,
+            cors
+          );
+        }
+
+        const notificationId =
+          cleanText(
+            body.notification_id ||
+            body.id,
+            200
+          );
+
+        if (!notificationId) {
+          return json(
+            {
+              ok: false,
+              error:
+                "Missing notification_id."
+            },
+            400,
+            cors
+          );
+        }
+
+        await env.STAGYLIGHT_DB
+          .prepare(
+            `UPDATE social_notifications
+             SET is_read = 1
+             WHERE id = ?
+               AND target_user_id = ?`
+          )
+          .bind(
+            notificationId,
+            session.user.id
+          )
+          .run();
+
+        return json(
+          {
+            ok: true,
+            message:
+              "Notification marked as read."
+          },
+          200,
+          cors
+        );
+      }
+
+
+      // =========================================================
+      // MARK ALL NOTIFICATIONS READ
+      // =========================================================
+
+      if (
+        body.action ===
+        "mark_notifications_read"
+      ) {
+
+        requireDatabase(env);
+        await ensureSocialTables(env);
+
+        const session =
+          await authenticateSession(
+            env,
+            body.token
+          );
+
+        if (!session) {
+          return json(
+            {
+              ok: false,
+              error:
+                "Session is invalid or expired."
+            },
+            401,
+            cors
+          );
+        }
+
+        await env.STAGYLIGHT_DB
+          .prepare(
+            `UPDATE social_notifications
+             SET is_read = 1
+             WHERE target_user_id = ?
+               AND is_read = 0`
+          )
+          .bind(
+            session.user.id
+          )
+          .run();
+
+        return json(
+          {
+            ok: true,
+            unread: 0,
+            message:
+              "Notifications marked as read."
           },
           200,
           cors
@@ -773,11 +1597,9 @@ export default {
             .trim()
             .toLowerCase();
 
-
         if (stickerType === "happy") {
           stickerType = "haha";
         }
-
 
         const supportedStickers = [
           "haha",
@@ -787,7 +1609,6 @@ export default {
           "like",
           "celebrate"
         ];
-
 
         if (
           !supportedStickers.includes(
@@ -805,9 +1626,6 @@ export default {
           );
         }
 
-
-        // Q-STICKERS USE MEDIUM QUALITY FOR FASTER GENERATION.
-        // MY Q GENERATION REMAINS HIGH QUALITY.
         const result =
           await submitFal(
             env.FAL_KEY,
@@ -817,7 +1635,6 @@ export default {
             ),
             "medium"
           );
-
 
         if (
           !result.ok ||
@@ -850,7 +1667,6 @@ export default {
             cors
           );
         }
-
 
         return json(
           {
@@ -1086,7 +1902,6 @@ export class AIJobController {
       const body =
         await request.json();
 
-
       if (
         body.action ===
         "job_test"
@@ -1101,7 +1916,6 @@ export class AIJobController {
           fal_called: false
         });
       }
-
 
       if (
         body.action ===
@@ -1169,7 +1983,6 @@ export class AIJobController {
         });
       }
 
-
       if (
         body.action ===
         "get_job"
@@ -1196,7 +2009,6 @@ export class AIJobController {
           job
         });
       }
-
 
       if (
         body.action ===
@@ -1328,7 +2140,6 @@ export class AIJobController {
         });
       }
 
-
       if (
         body.action ===
         "advance_job"
@@ -1377,7 +2188,6 @@ export class AIJobController {
             500
           );
         }
-
 
         if (
           job.stage_1_status ===
@@ -1491,7 +2301,6 @@ export class AIJobController {
           );
         }
 
-
         if (
           job.stage_1_status ===
             "completed" &&
@@ -1575,7 +2384,6 @@ export class AIJobController {
             job
           });
         }
-
 
         if (
           job.stage_2_status ===
@@ -1713,7 +2521,6 @@ export class AIJobController {
         });
       }
 
-
       return controllerJson(
         {
           ok: false,
@@ -1735,6 +2542,280 @@ export class AIJobController {
       );
     }
   }
+}
+
+
+// ===============================================================
+// SOCIAL DATABASE HELPERS
+// ===============================================================
+
+async function ensureSocialTables(env) {
+
+  requireDatabase(env);
+
+  await env.STAGYLIGHT_DB
+    .prepare(
+      `CREATE TABLE IF NOT EXISTS social_follows (
+        id TEXT PRIMARY KEY,
+        follower_user_id TEXT NOT NULL,
+        following_user_id TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        UNIQUE (
+          follower_user_id,
+          following_user_id
+        )
+      )`
+    )
+    .run();
+
+  await env.STAGYLIGHT_DB
+    .prepare(
+      `CREATE INDEX IF NOT EXISTS idx_social_follows_follower
+       ON social_follows (
+         follower_user_id
+       )`
+    )
+    .run();
+
+  await env.STAGYLIGHT_DB
+    .prepare(
+      `CREATE INDEX IF NOT EXISTS idx_social_follows_following
+       ON social_follows (
+         following_user_id
+       )`
+    )
+    .run();
+
+  await env.STAGYLIGHT_DB
+    .prepare(
+      `CREATE TABLE IF NOT EXISTS social_notifications (
+        id TEXT PRIMARY KEY,
+        target_user_id TEXT NOT NULL,
+        actor_user_id TEXT,
+        type TEXT NOT NULL,
+        post_id TEXT,
+        message TEXT,
+        is_read INTEGER NOT NULL DEFAULT 0,
+        created_at TEXT NOT NULL
+      )`
+    )
+    .run();
+
+  await env.STAGYLIGHT_DB
+    .prepare(
+      `CREATE INDEX IF NOT EXISTS idx_social_notifications_target
+       ON social_notifications (
+         target_user_id,
+         created_at
+       )`
+    )
+    .run();
+
+  await env.STAGYLIGHT_DB
+    .prepare(
+      `CREATE INDEX IF NOT EXISTS idx_social_notifications_unread
+       ON social_notifications (
+         target_user_id,
+         is_read
+       )`
+    )
+    .run();
+}
+
+
+async function findTargetUser(
+  env,
+  body
+) {
+
+  const id =
+    cleanText(
+      body.target_user_id ||
+      body.user_id ||
+      "",
+      200
+    );
+
+  if (id) {
+
+    const byId =
+      await env.STAGYLIGHT_DB
+        .prepare(
+          `SELECT *
+           FROM users
+           WHERE id = ?
+           LIMIT 1`
+        )
+        .bind(id)
+        .first();
+
+    if (byId) {
+      return byId;
+    }
+  }
+
+  const username =
+    normalizeUsername(
+      body.target_username ||
+      body.username ||
+      ""
+    );
+
+  if (!username) {
+    return null;
+  }
+
+  return await env.STAGYLIGHT_DB
+    .prepare(
+      `SELECT *
+       FROM users
+       WHERE lower(username) = ?
+       LIMIT 1`
+    )
+    .bind(username)
+    .first();
+}
+
+
+async function getFollowCounts(
+  env,
+  userId
+) {
+
+  const followers =
+    await env.STAGYLIGHT_DB
+      .prepare(
+        `SELECT COUNT(*) AS total
+         FROM social_follows
+         WHERE following_user_id = ?`
+      )
+      .bind(userId)
+      .first();
+
+  const following =
+    await env.STAGYLIGHT_DB
+      .prepare(
+        `SELECT COUNT(*) AS total
+         FROM social_follows
+         WHERE follower_user_id = ?`
+      )
+      .bind(userId)
+      .first();
+
+  return {
+    followers:
+      Number(
+        followers?.total || 0
+      ),
+    following:
+      Number(
+        following?.total || 0
+      )
+  };
+}
+
+
+async function createSocialNotification(
+  env,
+  data
+) {
+
+  if (
+    !data.targetUserId ||
+    !data.actorUserId ||
+    data.targetUserId ===
+      data.actorUserId
+  ) {
+    return null;
+  }
+
+  const id =
+    crypto.randomUUID();
+
+  const createdAt =
+    data.createdAt ||
+    new Date().toISOString();
+
+  await env.STAGYLIGHT_DB
+    .prepare(
+      `INSERT INTO social_notifications (
+        id,
+        target_user_id,
+        actor_user_id,
+        type,
+        post_id,
+        message,
+        is_read,
+        created_at
+      )
+      VALUES (?, ?, ?, ?, ?, ?, 0, ?)`
+    )
+    .bind(
+      id,
+      data.targetUserId,
+      data.actorUserId,
+      cleanText(
+        data.type,
+        40
+      ),
+      cleanNullableText(
+        data.postId,
+        300
+      ),
+      cleanNullableText(
+        data.message,
+        500
+      ),
+      createdAt
+    )
+    .run();
+
+  return {
+    id,
+    target_user_id:
+      data.targetUserId,
+    actor_user_id:
+      data.actorUserId,
+    type:
+      data.type,
+    post_id:
+      data.postId || null,
+    message:
+      data.message || "",
+    is_read: false,
+    created_at:
+      createdAt
+  };
+}
+
+
+function defaultNotificationMessage(
+  type,
+  actor
+) {
+
+  const name =
+    actor.display_name ||
+    actor.username ||
+    "Someone";
+
+  if (type === "like") {
+    return `${name} liked your post.`;
+  }
+
+  if (type === "comment") {
+    return `${name} commented on your post.`;
+  }
+
+  if (type === "share") {
+    return `${name} shared your post.`;
+  }
+
+  if (type === "message") {
+    return `${name} sent you a message.`;
+  }
+
+  return `${name} interacted with you.`;
 }
 
 
@@ -2879,11 +3960,9 @@ without text.
 `
   };
 
-
   const reaction =
     reactions[type] ||
     reactions.haha;
-
 
   return `
 
