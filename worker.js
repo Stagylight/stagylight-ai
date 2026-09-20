@@ -697,6 +697,179 @@ export default {
 
 
       // =========================================================
+      // SEARCH REGISTERED USERS
+      // =========================================================
+
+      if (body.action === "search_users") {
+
+        requireDatabase(env);
+
+        const session =
+          await authenticateSession(
+            env,
+            body.token
+          );
+
+        if (!session) {
+          return json(
+            {
+              ok: false,
+              error:
+                "Session is invalid or expired."
+            },
+            401,
+            cors
+          );
+        }
+
+        const query =
+          String(
+            body.query ||
+            body.search ||
+            ""
+          )
+            .trim()
+            .toLowerCase()
+            .replace(/^@+/, "")
+            .slice(0, 80);
+
+        let limit =
+          Number(body.limit || 50);
+
+        if (
+          !Number.isFinite(limit) ||
+          limit < 1
+        ) {
+          limit = 50;
+        }
+
+        limit =
+          Math.min(
+            Math.floor(limit),
+            100
+          );
+
+        let result;
+
+        if (query) {
+
+          const pattern =
+            "%" + query + "%";
+
+          result =
+            await env.STAGYLIGHT_DB
+              .prepare(
+                `SELECT
+                  id,
+                  username,
+                  display_name,
+                  profile_image_url,
+                  bio,
+                  location,
+                  languages,
+                  availability,
+                  created_at,
+                  updated_at
+                 FROM users
+                 WHERE id <> ?
+                   AND (
+                     lower(username) LIKE ?
+                     OR lower(display_name) LIKE ?
+                   )
+                 ORDER BY
+                   CASE
+                     WHEN lower(username) = ? THEN 0
+                     WHEN lower(display_name) = ? THEN 1
+                     WHEN lower(username) LIKE ? THEN 2
+                     ELSE 3
+                   END,
+                   lower(display_name) ASC,
+                   lower(username) ASC
+                 LIMIT ?`
+              )
+              .bind(
+                session.user.id,
+                pattern,
+                pattern,
+                query,
+                query,
+                query + "%",
+                limit
+              )
+              .all();
+
+        } else {
+
+          result =
+            await env.STAGYLIGHT_DB
+              .prepare(
+                `SELECT
+                  id,
+                  username,
+                  display_name,
+                  profile_image_url,
+                  bio,
+                  location,
+                  languages,
+                  availability,
+                  created_at,
+                  updated_at
+                 FROM users
+                 WHERE id <> ?
+                 ORDER BY created_at DESC
+                 LIMIT ?`
+              )
+              .bind(
+                session.user.id,
+                limit
+              )
+              .all();
+        }
+
+        const users =
+          (result.results || [])
+            .map(
+              user => ({
+                id:
+                  user.id,
+                username:
+                  user.username || "",
+                display_name:
+                  user.display_name ||
+                  user.username ||
+                  "STAGYLIGHT User",
+                profile_image_url:
+                  user.profile_image_url ||
+                  null,
+                bio:
+                  user.bio || null,
+                location:
+                  user.location || null,
+                languages:
+                  user.languages || null,
+                availability:
+                  user.availability || null,
+                created_at:
+                  user.created_at,
+                updated_at:
+                  user.updated_at
+              })
+            );
+
+        return json(
+          {
+            ok: true,
+            users,
+            total:
+              users.length
+          },
+          200,
+          cors
+        );
+      }
+
+
+      // =========================================================
       // SOCIAL DATABASE
       // =========================================================
 
@@ -1101,7 +1274,6 @@ export default {
 
       // =========================================================
       // CREATE SOCIAL NOTIFICATION
-      // LIKE / COMMENT / SHARE
       // =========================================================
 
       if (body.action === "create_notification") {
@@ -1143,11 +1315,7 @@ export default {
           "message"
         ];
 
-        if (
-          !supportedTypes.includes(
-            type
-          )
-        ) {
+        if (!supportedTypes.includes(type)) {
           return json(
             {
               ok: false,
@@ -1926,18 +2094,13 @@ export class AIJobController {
           new Date().toISOString();
 
         const job = {
-
           job_id:
             body.job_id,
-
           status: "created",
-
           stage: "waiting",
-
           source_image:
             body.image_url ||
             null,
-
           stage_1_status:
             "not_started",
           stage_1_request_id:
@@ -1948,7 +2111,6 @@ export class AIJobController {
             null,
           stage_1_image:
             null,
-
           stage_2_status:
             "not_started",
           stage_2_request_id:
@@ -1959,14 +2121,10 @@ export class AIJobController {
             null,
           stage_2_image:
             null,
-
           final_image: null,
-
           error: null,
-
           created_at: now,
           updated_at: now,
-
           fal_called: false
         };
 
@@ -2845,6 +3003,7 @@ function normalizeUsername(value) {
 
   return String(value || "")
     .trim()
+    .replace(/^@+/, "")
     .toLowerCase();
 }
 
