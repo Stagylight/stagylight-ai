@@ -29,174 +29,117 @@ export default {
 
 
       // =========================================================
-      // STAGYLIGHT ACCOUNT DATABASE TEST
+      // ACCOUNT DATABASE TEST
       // =========================================================
 
       if (body.action === "account_test") {
 
         requireDatabase(env);
 
-        const users =
-          await env.STAGYLIGHT_DB
-            .prepare(
-              "SELECT COUNT(*) AS total FROM users"
-            )
-            .first();
+        const users = await env.STAGYLIGHT_DB
+          .prepare("SELECT COUNT(*) AS total FROM users")
+          .first();
 
-        const sessions =
-          await env.STAGYLIGHT_DB
-            .prepare(
-              "SELECT COUNT(*) AS total FROM sessions"
-            )
-            .first();
+        const sessions = await env.STAGYLIGHT_DB
+          .prepare("SELECT COUNT(*) AS total FROM sessions")
+          .first();
 
-        return json(
-          {
-            ok: true,
-            service: "STAGYLIGHT Accounts",
-            database: "connected",
-            users: Number(users?.total || 0),
-            sessions: Number(sessions?.total || 0),
-            message:
-              "STAGYLIGHT account database is connected."
-          },
-          200,
-          cors
-        );
+        return json({
+          ok: true,
+          service: "STAGYLIGHT Accounts",
+          database: "connected",
+          users: Number(users?.total || 0),
+          sessions: Number(sessions?.total || 0),
+          message: "STAGYLIGHT account database is connected."
+        }, 200, cors);
       }
 
 
       // =========================================================
-      // SIGN UP
+      // SIGNUP
       // =========================================================
 
       if (body.action === "signup") {
 
         requireDatabase(env);
 
-        const email =
-          normalizeEmail(body.email);
-
-        const username =
-          normalizeUsername(body.username);
-
-        const displayName =
-          cleanText(body.display_name, 80);
-
-        const password =
-          String(body.password || "");
+        const email = normalizeEmail(body.email);
+        const username = normalizeUsername(body.username);
+        const displayName = cleanText(body.display_name, 80);
+        const password = String(body.password || "");
 
         if (!isValidEmail(email)) {
-          return json(
-            {
-              ok: false,
-              error: "Please enter a valid email address."
-            },
-            400,
-            cors
-          );
+          return json({
+            ok: false,
+            error: "Please enter a valid email address."
+          }, 400, cors);
         }
 
         if (!isValidUsername(username)) {
-          return json(
-            {
-              ok: false,
-              error:
-                "Username must be 3-30 characters and use only letters, numbers, dots or underscores."
-            },
-            400,
-            cors
-          );
+          return json({
+            ok: false,
+            error: "Username must be 3-30 characters and use only letters, numbers, dots or underscores."
+          }, 400, cors);
         }
 
         if (!displayName) {
-          return json(
-            {
-              ok: false,
-              error: "Display name is required."
-            },
-            400,
-            cors
-          );
+          return json({
+            ok: false,
+            error: "Display name is required."
+          }, 400, cors);
         }
 
         if (password.length < 8) {
-          return json(
-            {
-              ok: false,
-              error:
-                "Password must contain at least 8 characters."
-            },
-            400,
-            cors
-          );
+          return json({
+            ok: false,
+            error: "Password must contain at least 8 characters."
+          }, 400, cors);
         }
 
         if (password.length > 128) {
-          return json(
-            {
-              ok: false,
-              error: "Password is too long."
-            },
-            400,
-            cors
-          );
+          return json({
+            ok: false,
+            error: "Password is too long."
+          }, 400, cors);
         }
 
-        const existing =
-          await env.STAGYLIGHT_DB
-            .prepare(
-              `SELECT id, email, username
-               FROM users
-               WHERE lower(email) = ?
-                  OR lower(username) = ?
-               LIMIT 1`
-            )
-            .bind(email, username)
-            .first();
+        const existing = await env.STAGYLIGHT_DB
+          .prepare(`
+            SELECT id, email, username
+            FROM users
+            WHERE lower(email) = ?
+               OR lower(username) = ?
+            LIMIT 1
+          `)
+          .bind(email, username)
+          .first();
 
         if (existing) {
 
           if (
-            String(existing.email || "")
-              .toLowerCase() === email
+            String(existing.email || "").toLowerCase() === email
           ) {
-            return json(
-              {
-                ok: false,
-                error:
-                  "An account already exists with this email."
-              },
-              409,
-              cors
-            );
+            return json({
+              ok: false,
+              error: "An account already exists with this email."
+            }, 409, cors);
           }
 
-          return json(
-            {
-              ok: false,
-              error:
-                "This username is already taken."
-            },
-            409,
-            cors
-          );
+          return json({
+            ok: false,
+            error: "This username is already taken."
+          }, 409, cors);
         }
 
-        const userId =
-          crypto.randomUUID();
-
-        const passwordHash =
-          await hashPassword(password);
-
-        const now =
-          new Date().toISOString();
+        const userId = crypto.randomUUID();
+        const passwordHash = await hashPassword(password);
+        const now = new Date().toISOString();
 
         try {
 
           await env.STAGYLIGHT_DB
-            .prepare(
-              `INSERT INTO users (
+            .prepare(`
+              INSERT INTO users (
                 id,
                 email,
                 username,
@@ -212,8 +155,8 @@ export default {
                 created_at,
                 updated_at
               )
-              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-            )
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            `)
             .bind(
               userId,
               email,
@@ -222,26 +165,11 @@ export default {
               passwordHash,
               "email",
               null,
-              cleanNullableText(
-                body.profile_image_url,
-                2000
-              ),
-              cleanNullableText(
-                body.bio,
-                500
-              ),
-              cleanNullableText(
-                body.location,
-                120
-              ),
-              cleanNullableText(
-                body.languages,
-                300
-              ),
-              cleanNullableText(
-                body.availability,
-                120
-              ),
+              cleanNullableText(body.profile_image_url, 2000),
+              cleanNullableText(body.bio, 500),
+              cleanNullableText(body.location, 120),
+              cleanNullableText(body.languages, 300),
+              cleanNullableText(body.availability, 120),
               now,
               now
             )
@@ -254,72 +182,42 @@ export default {
               .toLowerCase()
               .includes("unique")
           ) {
-            return json(
-              {
-                ok: false,
-                error:
-                  "Email or username is already registered."
-              },
-              409,
-              cors
-            );
+            return json({
+              ok: false,
+              error: "Email or username is already registered."
+            }, 409, cors);
           }
 
           throw e;
         }
 
-        const session =
-          await createSession(
-            env,
-            userId
-          );
+        const session = await createSession(env, userId);
 
-        return json(
-          {
-            ok: true,
-            message:
-              "STAGYLIGHT account created.",
-            token: session.token,
-            expires_at:
-              session.expires_at,
-            user: {
-              id: userId,
-              email,
-              username,
-              display_name: displayName,
-              auth_provider: "email",
-              profile_image_url:
-                cleanNullableText(
-                  body.profile_image_url,
-                  2000
-                ),
-              bio:
-                cleanNullableText(
-                  body.bio,
-                  500
-                ),
-              location:
-                cleanNullableText(
-                  body.location,
-                  120
-                ),
-              languages:
-                cleanNullableText(
-                  body.languages,
-                  300
-                ),
-              availability:
-                cleanNullableText(
-                  body.availability,
-                  120
-                ),
-              created_at: now,
-              updated_at: now
-            }
-          },
-          201,
-          cors
-        );
+        return json({
+          ok: true,
+          message: "STAGYLIGHT account created.",
+          token: session.token,
+          expires_at: session.expires_at,
+          user: {
+            id: userId,
+            email,
+            username,
+            display_name: displayName,
+            auth_provider: "email",
+            profile_image_url:
+              cleanNullableText(body.profile_image_url, 2000),
+            bio:
+              cleanNullableText(body.bio, 500),
+            location:
+              cleanNullableText(body.location, 120),
+            languages:
+              cleanNullableText(body.languages, 300),
+            availability:
+              cleanNullableText(body.availability, 120),
+            created_at: now,
+            updated_at: now
+          }
+        }, 201, cors);
       }
 
 
@@ -331,95 +229,67 @@ export default {
 
         requireDatabase(env);
 
-        const login =
-          String(
-            body.login ||
-            body.email ||
-            body.username ||
-            ""
-          )
-            .trim()
-            .toLowerCase();
+        const login = String(
+          body.login ||
+          body.email ||
+          body.username ||
+          ""
+        )
+          .trim()
+          .toLowerCase();
 
-        const password =
-          String(body.password || "");
+        const password = String(body.password || "");
 
         if (!login || !password) {
-          return json(
-            {
-              ok: false,
-              error:
-                "Email/username and password are required."
-            },
-            400,
-            cors
-          );
+          return json({
+            ok: false,
+            error: "Email/username and password are required."
+          }, 400, cors);
         }
 
-        const user =
-          await env.STAGYLIGHT_DB
-            .prepare(
-              `SELECT *
-               FROM users
-               WHERE lower(email) = ?
-                  OR lower(username) = ?
-               LIMIT 1`
-            )
-            .bind(login, login)
-            .first();
+        const user = await env.STAGYLIGHT_DB
+          .prepare(`
+            SELECT *
+            FROM users
+            WHERE lower(email) = ?
+               OR lower(username) = ?
+            LIMIT 1
+          `)
+          .bind(login, login)
+          .first();
 
         if (
           !user ||
           !user.password_hash ||
           user.auth_provider !== "email"
         ) {
-          return json(
-            {
-              ok: false,
-              error:
-                "Incorrect email/username or password."
-            },
-            401,
-            cors
-          );
+          return json({
+            ok: false,
+            error: "Incorrect email/username or password."
+          }, 401, cors);
         }
 
-        const valid =
-          await verifyPassword(
-            password,
-            user.password_hash
-          );
+        const valid = await verifyPassword(
+          password,
+          user.password_hash
+        );
 
         if (!valid) {
-          return json(
-            {
-              ok: false,
-              error:
-                "Incorrect email/username or password."
-            },
-            401,
-            cors
-          );
+          return json({
+            ok: false,
+            error: "Incorrect email/username or password."
+          }, 401, cors);
         }
 
-        const session =
-          await createSession(
-            env,
-            user.id
-          );
+        const session = await createSession(env, user.id);
 
-        return json(
-          {
-            ok: true,
-            message: "Login successful.",
-            token: session.token,
-            expires_at:
-              session.expires_at,
-            user: publicUser(user)
-          },
-          200,
-          cors
-        );
+        return json({
+          ok: true,
+          message: "Login successful.",
+          token: session.token,
+          expires_at: session.expires_at,
+          user: publicUser(user)
+        }, 200, cors);
       }
 
 
@@ -434,37 +304,25 @@ export default {
 
         requireDatabase(env);
 
-        const session =
-          await authenticateSession(
-            env,
-            body.token
-          );
+        const session = await authenticateSession(
+          env,
+          body.token
+        );
 
         if (!session) {
-          return json(
-            {
-              ok: false,
-              authenticated: false,
-              error:
-                "Session is invalid or expired."
-            },
-            401,
-            cors
-          );
+          return json({
+            ok: false,
+            authenticated: false,
+            error: "Session is invalid or expired."
+          }, 401, cors);
         }
 
-        return json(
-          {
-            ok: true,
-            authenticated: true,
-            user:
-              publicUser(session.user),
-            expires_at:
-              session.expires_at
-          },
-          200,
-          cors
-        );
+        return json({
+          ok: true,
+          authenticated: true,
+          user: publicUser(session.user),
+          expires_at: session.expires_at
+        }, 200, cors);
       }
 
 
@@ -476,153 +334,104 @@ export default {
 
         requireDatabase(env);
 
-        const session =
-          await authenticateSession(
-            env,
-            body.token
-          );
+        const session = await authenticateSession(
+          env,
+          body.token
+        );
 
         if (!session) {
-          return json(
-            {
-              ok: false,
-              error:
-                "Session is invalid or expired."
-            },
-            401,
-            cors
-          );
+          return json({
+            ok: false,
+            error: "Session is invalid or expired."
+          }, 401, cors);
         }
 
-        const current =
-          session.user;
+        const current = session.user;
 
         const displayName =
           body.display_name === undefined
             ? current.display_name
-            : cleanText(
-                body.display_name,
-                80
-              );
+            : cleanText(body.display_name, 80);
 
         if (!displayName) {
-          return json(
-            {
-              ok: false,
-              error:
-                "Display name cannot be empty."
-            },
-            400,
-            cors
-          );
+          return json({
+            ok: false,
+            error: "Display name cannot be empty."
+          }, 400, cors);
         }
 
-        let username =
-          current.username;
+        let username = current.username;
 
         if (body.username !== undefined) {
 
-          username =
-            normalizeUsername(
-              body.username
-            );
+          username = normalizeUsername(body.username);
 
           if (!isValidUsername(username)) {
-            return json(
-              {
-                ok: false,
-                error:
-                  "Username must be 3-30 characters and use only letters, numbers, dots or underscores."
-              },
-              400,
-              cors
-            );
+            return json({
+              ok: false,
+              error: "Username must be 3-30 characters and use only letters, numbers, dots or underscores."
+            }, 400, cors);
           }
 
-          const taken =
-            await env.STAGYLIGHT_DB
-              .prepare(
-                `SELECT id
-                 FROM users
-                 WHERE lower(username) = ?
-                   AND id <> ?
-                 LIMIT 1`
-              )
-              .bind(
-                username,
-                current.id
-              )
-              .first();
+          const taken = await env.STAGYLIGHT_DB
+            .prepare(`
+              SELECT id
+              FROM users
+              WHERE lower(username) = ?
+                AND id <> ?
+              LIMIT 1
+            `)
+            .bind(username, current.id)
+            .first();
 
           if (taken) {
-            return json(
-              {
-                ok: false,
-                error:
-                  "This username is already taken."
-              },
-              409,
-              cors
-            );
+            return json({
+              ok: false,
+              error: "This username is already taken."
+            }, 409, cors);
           }
         }
 
         const profileImage =
           body.profile_image_url === undefined
             ? current.profile_image_url
-            : cleanNullableText(
-                body.profile_image_url,
-                2000
-              );
+            : cleanNullableText(body.profile_image_url, 2000);
 
         const bio =
           body.bio === undefined
             ? current.bio
-            : cleanNullableText(
-                body.bio,
-                500
-              );
+            : cleanNullableText(body.bio, 500);
 
         const location =
           body.location === undefined
             ? current.location
-            : cleanNullableText(
-                body.location,
-                120
-              );
+            : cleanNullableText(body.location, 120);
 
         const languages =
           body.languages === undefined
             ? current.languages
-            : cleanNullableText(
-                body.languages,
-                300
-              );
+            : cleanNullableText(body.languages, 300);
 
         const availability =
           body.availability === undefined
             ? current.availability
-            : cleanNullableText(
-                body.availability,
-                120
-              );
+            : cleanNullableText(body.availability, 120);
 
-        const now =
-          new Date().toISOString();
+        const now = new Date().toISOString();
 
         await env.STAGYLIGHT_DB
-          .prepare(
-            `UPDATE users
-             SET username = ?,
-                 display_name = ?,
-                 profile_image_url = ?,
-                 bio = ?,
-                 location = ?,
-                 languages = ?,
-                 availability = ?,
-                 updated_at = ?
-             WHERE id = ?`
-          )
+          .prepare(`
+            UPDATE users
+            SET username = ?,
+                display_name = ?,
+                profile_image_url = ?,
+                bio = ?,
+                location = ?,
+                languages = ?,
+                availability = ?,
+                updated_at = ?
+            WHERE id = ?
+          `)
           .bind(
             username,
             displayName,
@@ -636,27 +445,21 @@ export default {
           )
           .run();
 
-        const updated =
-          await env.STAGYLIGHT_DB
-            .prepare(
-              `SELECT *
-               FROM users
-               WHERE id = ?
-               LIMIT 1`
-            )
-            .bind(current.id)
-            .first();
+        const updated = await env.STAGYLIGHT_DB
+          .prepare(`
+            SELECT *
+            FROM users
+            WHERE id = ?
+            LIMIT 1
+          `)
+          .bind(current.id)
+          .first();
 
-        return json(
-          {
-            ok: true,
-            message:
-              "Profile updated.",
-            user: publicUser(updated)
-          },
-          200,
-          cors
-        );
+        return json({
+          ok: true,
+          message: "Profile updated.",
+          user: publicUser(updated)
+        }, 200, cors);
       }
 
 
@@ -668,209 +471,164 @@ export default {
 
         requireDatabase(env);
 
-        const token =
-          String(body.token || "");
+        const token = String(body.token || "");
 
         if (token) {
 
-          const tokenHash =
-            await sha256Hex(token);
+          const tokenHash = await sha256Hex(token);
 
           await env.STAGYLIGHT_DB
-            .prepare(
-              `DELETE FROM sessions
-               WHERE token_hash = ?`
-            )
+            .prepare(`
+              DELETE FROM sessions
+              WHERE token_hash = ?
+            `)
             .bind(tokenHash)
             .run();
         }
 
-        return json(
-          {
-            ok: true,
-            message: "Logged out."
-          },
-          200,
-          cors
-        );
+        return json({
+          ok: true,
+          message: "Logged out."
+        }, 200, cors);
       }
 
 
       // =========================================================
-      // SEARCH REGISTERED USERS
+      // SEARCH USERS
       // =========================================================
 
       if (body.action === "search_users") {
 
         requireDatabase(env);
 
-        const session =
-          await authenticateSession(
-            env,
-            body.token
-          );
+        const session = await authenticateSession(
+          env,
+          body.token
+        );
 
         if (!session) {
-          return json(
-            {
-              ok: false,
-              error:
-                "Session is invalid or expired."
-            },
-            401,
-            cors
-          );
+          return json({
+            ok: false,
+            error: "Session is invalid or expired."
+          }, 401, cors);
         }
 
-        const query =
-          String(
-            body.query ||
-            body.search ||
-            ""
-          )
-            .trim()
-            .toLowerCase()
-            .replace(/^@+/, "")
-            .slice(0, 80);
+        const query = String(
+          body.query ||
+          body.search ||
+          ""
+        )
+          .trim()
+          .toLowerCase()
+          .replace(/^@+/, "")
+          .slice(0, 80);
 
-        let limit =
-          Number(body.limit || 50);
+        let limit = Number(body.limit || 50);
 
-        if (
-          !Number.isFinite(limit) ||
-          limit < 1
-        ) {
+        if (!Number.isFinite(limit) || limit < 1) {
           limit = 50;
         }
 
-        limit =
-          Math.min(
-            Math.floor(limit),
-            100
-          );
+        limit = Math.min(Math.floor(limit), 100);
 
         let result;
 
         if (query) {
 
-          const pattern =
-            "%" + query + "%";
+          const pattern = "%" + query + "%";
 
-          result =
-            await env.STAGYLIGHT_DB
-              .prepare(
-                `SELECT
-                  id,
-                  username,
-                  display_name,
-                  profile_image_url,
-                  bio,
-                  location,
-                  languages,
-                  availability,
-                  created_at,
-                  updated_at
-                 FROM users
-                 WHERE id <> ?
-                   AND (
-                     lower(username) LIKE ?
-                     OR lower(display_name) LIKE ?
-                   )
-                 ORDER BY
-                   CASE
-                     WHEN lower(username) = ? THEN 0
-                     WHEN lower(display_name) = ? THEN 1
-                     WHEN lower(username) LIKE ? THEN 2
-                     ELSE 3
-                   END,
-                   lower(display_name) ASC,
-                   lower(username) ASC
-                 LIMIT ?`
-              )
-              .bind(
-                session.user.id,
-                pattern,
-                pattern,
-                query,
-                query,
-                query + "%",
-                limit
-              )
-              .all();
+          result = await env.STAGYLIGHT_DB
+            .prepare(`
+              SELECT
+                id,
+                username,
+                display_name,
+                profile_image_url,
+                bio,
+                location,
+                languages,
+                availability,
+                created_at,
+                updated_at
+              FROM users
+              WHERE id <> ?
+                AND (
+                  lower(username) LIKE ?
+                  OR lower(display_name) LIKE ?
+                )
+              ORDER BY
+                CASE
+                  WHEN lower(username) = ? THEN 0
+                  WHEN lower(display_name) = ? THEN 1
+                  WHEN lower(username) LIKE ? THEN 2
+                  ELSE 3
+                END,
+                lower(display_name) ASC,
+                lower(username) ASC
+              LIMIT ?
+            `)
+            .bind(
+              session.user.id,
+              pattern,
+              pattern,
+              query,
+              query,
+              query + "%",
+              limit
+            )
+            .all();
 
         } else {
 
-          result =
-            await env.STAGYLIGHT_DB
-              .prepare(
-                `SELECT
-                  id,
-                  username,
-                  display_name,
-                  profile_image_url,
-                  bio,
-                  location,
-                  languages,
-                  availability,
-                  created_at,
-                  updated_at
-                 FROM users
-                 WHERE id <> ?
-                 ORDER BY created_at DESC
-                 LIMIT ?`
-              )
-              .bind(
-                session.user.id,
-                limit
-              )
-              .all();
+          result = await env.STAGYLIGHT_DB
+            .prepare(`
+              SELECT
+                id,
+                username,
+                display_name,
+                profile_image_url,
+                bio,
+                location,
+                languages,
+                availability,
+                created_at,
+                updated_at
+              FROM users
+              WHERE id <> ?
+              ORDER BY created_at DESC
+              LIMIT ?
+            `)
+            .bind(session.user.id, limit)
+            .all();
         }
 
-        const users =
-          (result.results || [])
-            .map(
-              user => ({
-                id:
-                  user.id,
-                username:
-                  user.username || "",
-                display_name:
-                  user.display_name ||
-                  user.username ||
-                  "STAGYLIGHT User",
-                profile_image_url:
-                  user.profile_image_url ||
-                  null,
-                bio:
-                  user.bio || null,
-                location:
-                  user.location || null,
-                languages:
-                  user.languages || null,
-                availability:
-                  user.availability || null,
-                created_at:
-                  user.created_at,
-                updated_at:
-                  user.updated_at
-              })
-            );
+        const users = (result.results || []).map(user => ({
+          id: user.id,
+          username: user.username || "",
+          display_name:
+            user.display_name ||
+            user.username ||
+            "STAGYLIGHT User",
+          profile_image_url:
+            user.profile_image_url || null,
+          bio: user.bio || null,
+          location: user.location || null,
+          languages: user.languages || null,
+          availability: user.availability || null,
+          created_at: user.created_at,
+          updated_at: user.updated_at
+        }));
 
-        return json(
-          {
-            ok: true,
-            users,
-            total:
-              users.length
-          },
-          200,
-          cors
-        );
+        return json({
+          ok: true,
+          users,
+          total: users.length
+        }, 200, cors);
       }
 
 
       // =========================================================
-      // SOCIAL DATABASE
+      // SOCIAL SETUP
       // =========================================================
 
       if (body.action === "social_setup") {
@@ -878,16 +636,12 @@ export default {
         requireDatabase(env);
 
         await ensureSocialTables(env);
+        await ensureMessageTables(env);
 
-        return json(
-          {
-            ok: true,
-            message:
-              "STAGYLIGHT social database is ready."
-          },
-          200,
-          cors
-        );
+        return json({
+          ok: true,
+          message: "STAGYLIGHT social database is ready."
+        }, 200, cors);
       }
 
 
@@ -900,89 +654,64 @@ export default {
         requireDatabase(env);
         await ensureSocialTables(env);
 
-        const session =
-          await authenticateSession(
-            env,
-            body.token
-          );
+        const session = await authenticateSession(
+          env,
+          body.token
+        );
 
         if (!session) {
-          return json(
-            {
-              ok: false,
-              error:
-                "Session is invalid or expired."
-            },
-            401,
-            cors
-          );
+          return json({
+            ok: false,
+            error: "Session is invalid or expired."
+          }, 401, cors);
         }
 
-        const target =
-          await findTargetUser(
-            env,
-            body
-          );
+        const target = await findTargetUser(env, body);
 
         if (!target) {
-          return json(
-            {
-              ok: false,
-              error:
-                "User not found."
-            },
-            404,
-            cors
-          );
+          return json({
+            ok: false,
+            error: "User not found."
+          }, 404, cors);
         }
 
-        if (
-          target.id ===
-          session.user.id
-        ) {
-          return json(
-            {
-              ok: false,
-              error:
-                "You cannot follow yourself."
-            },
-            400,
-            cors
-          );
+        if (target.id === session.user.id) {
+          return json({
+            ok: false,
+            error: "You cannot follow yourself."
+          }, 400, cors);
         }
 
-        const existing =
-          await env.STAGYLIGHT_DB
-            .prepare(
-              `SELECT id
-               FROM social_follows
-               WHERE follower_user_id = ?
-                 AND following_user_id = ?
-               LIMIT 1`
-            )
-            .bind(
-              session.user.id,
-              target.id
-            )
-            .first();
+        const existing = await env.STAGYLIGHT_DB
+          .prepare(`
+            SELECT id
+            FROM social_follows
+            WHERE follower_user_id = ?
+              AND following_user_id = ?
+            LIMIT 1
+          `)
+          .bind(
+            session.user.id,
+            target.id
+          )
+          .first();
 
         let created = false;
 
         if (!existing) {
 
-          const now =
-            new Date().toISOString();
+          const now = new Date().toISOString();
 
           await env.STAGYLIGHT_DB
-            .prepare(
-              `INSERT INTO social_follows (
+            .prepare(`
+              INSERT INTO social_follows (
                 id,
                 follower_user_id,
                 following_user_id,
                 created_at
               )
-              VALUES (?, ?, ?, ?)`
-            )
+              VALUES (?, ?, ?, ?)
+            `)
             .bind(
               crypto.randomUUID(),
               session.user.id,
@@ -991,45 +720,32 @@ export default {
             )
             .run();
 
-          await createSocialNotification(
-            env,
-            {
-              targetUserId:
-                target.id,
-              actorUserId:
-                session.user.id,
-              type: "follow",
-              postId: null,
-              message:
-                `${session.user.display_name || session.user.username} followed you.`,
-              createdAt: now
-            }
-          );
+          await createSocialNotification(env, {
+            targetUserId: target.id,
+            actorUserId: session.user.id,
+            type: "follow",
+            postId: null,
+            message:
+              `${session.user.display_name || session.user.username} followed you.`,
+            createdAt: now
+          });
 
           created = true;
         }
 
-        const counts =
-          await getFollowCounts(
-            env,
-            target.id
-          );
-
-        return json(
-          {
-            ok: true,
-            following: true,
-            created,
-            target_user:
-              publicUser(target),
-            followers:
-              counts.followers,
-            following_count:
-              counts.following
-          },
-          200,
-          cors
+        const counts = await getFollowCounts(
+          env,
+          target.id
         );
+
+        return json({
+          ok: true,
+          following: true,
+          created,
+          target_user: publicUser(target),
+          followers: counts.followers,
+          following_count: counts.following
+        }, 200, cors);
       }
 
 
@@ -1042,74 +758,51 @@ export default {
         requireDatabase(env);
         await ensureSocialTables(env);
 
-        const session =
-          await authenticateSession(
-            env,
-            body.token
-          );
+        const session = await authenticateSession(
+          env,
+          body.token
+        );
 
         if (!session) {
-          return json(
-            {
-              ok: false,
-              error:
-                "Session is invalid or expired."
-            },
-            401,
-            cors
-          );
+          return json({
+            ok: false,
+            error: "Session is invalid or expired."
+          }, 401, cors);
         }
 
-        const target =
-          await findTargetUser(
-            env,
-            body
-          );
+        const target = await findTargetUser(env, body);
 
         if (!target) {
-          return json(
-            {
-              ok: false,
-              error:
-                "User not found."
-            },
-            404,
-            cors
-          );
+          return json({
+            ok: false,
+            error: "User not found."
+          }, 404, cors);
         }
 
         await env.STAGYLIGHT_DB
-          .prepare(
-            `DELETE FROM social_follows
-             WHERE follower_user_id = ?
-               AND following_user_id = ?`
-          )
+          .prepare(`
+            DELETE FROM social_follows
+            WHERE follower_user_id = ?
+              AND following_user_id = ?
+          `)
           .bind(
             session.user.id,
             target.id
           )
           .run();
 
-        const counts =
-          await getFollowCounts(
-            env,
-            target.id
-          );
-
-        return json(
-          {
-            ok: true,
-            following: false,
-            target_user:
-              publicUser(target),
-            followers:
-              counts.followers,
-            following_count:
-              counts.following
-          },
-          200,
-          cors
+        const counts = await getFollowCounts(
+          env,
+          target.id
         );
+
+        return json({
+          ok: true,
+          following: false,
+          target_user: publicUser(target),
+          followers: counts.followers,
+          following_count: counts.following
+        }, 200, cors);
       }
 
 
@@ -1122,86 +815,60 @@ export default {
         requireDatabase(env);
         await ensureSocialTables(env);
 
-        const session =
-          await authenticateSession(
-            env,
-            body.token
-          );
+        const session = await authenticateSession(
+          env,
+          body.token
+        );
 
         if (!session) {
-          return json(
-            {
-              ok: false,
-              error:
-                "Session is invalid or expired."
-            },
-            401,
-            cors
-          );
+          return json({
+            ok: false,
+            error: "Session is invalid or expired."
+          }, 401, cors);
         }
 
-        const target =
-          await findTargetUser(
-            env,
-            body
-          );
+        const target = await findTargetUser(env, body);
 
         if (!target) {
-          return json(
-            {
-              ok: false,
-              error:
-                "User not found."
-            },
-            404,
-            cors
-          );
+          return json({
+            ok: false,
+            error: "User not found."
+          }, 404, cors);
         }
 
-        const relation =
-          await env.STAGYLIGHT_DB
-            .prepare(
-              `SELECT id
-               FROM social_follows
-               WHERE follower_user_id = ?
-                 AND following_user_id = ?
-               LIMIT 1`
-            )
-            .bind(
-              session.user.id,
-              target.id
-            )
-            .first();
-
-        const counts =
-          await getFollowCounts(
-            env,
+        const relation = await env.STAGYLIGHT_DB
+          .prepare(`
+            SELECT id
+            FROM social_follows
+            WHERE follower_user_id = ?
+              AND following_user_id = ?
+            LIMIT 1
+          `)
+          .bind(
+            session.user.id,
             target.id
-          );
+          )
+          .first();
 
-        return json(
-          {
-            ok: true,
-            following:
-              Boolean(relation),
-            is_self:
-              target.id ===
-              session.user.id,
-            followers:
-              counts.followers,
-            following_count:
-              counts.following,
-            target_user:
-              publicUser(target)
-          },
-          200,
-          cors
+        const counts = await getFollowCounts(
+          env,
+          target.id
         );
+
+        return json({
+          ok: true,
+          following: Boolean(relation),
+          is_self:
+            target.id === session.user.id,
+          followers: counts.followers,
+          following_count: counts.following,
+          target_user: publicUser(target)
+        }, 200, cors);
       }
 
 
       // =========================================================
-      // GET FOLLOW COUNTS
+      // FOLLOW COUNTS
       // =========================================================
 
       if (body.action === "get_follow_counts") {
@@ -1217,63 +884,43 @@ export default {
           body.username ||
           body.target_username
         ) {
-          target =
-            await findTargetUser(
-              env,
-              body
-            );
+          target = await findTargetUser(env, body);
         } else {
 
-          const session =
-            await authenticateSession(
-              env,
-              body.token
-            );
+          const session = await authenticateSession(
+            env,
+            body.token
+          );
 
           if (session) {
-            target =
-              session.user;
+            target = session.user;
           }
         }
 
         if (!target) {
-          return json(
-            {
-              ok: false,
-              error:
-                "User not found."
-            },
-            404,
-            cors
-          );
+          return json({
+            ok: false,
+            error: "User not found."
+          }, 404, cors);
         }
 
-        const counts =
-          await getFollowCounts(
-            env,
-            target.id
-          );
-
-        return json(
-          {
-            ok: true,
-            user_id:
-              target.id,
-            username:
-              target.username,
-            followers:
-              counts.followers,
-            following:
-              counts.following
-          },
-          200,
-          cors
+        const counts = await getFollowCounts(
+          env,
+          target.id
         );
+
+        return json({
+          ok: true,
+          user_id: target.id,
+          username: target.username,
+          followers: counts.followers,
+          following: counts.following
+        }, 200, cors);
       }
 
 
       // =========================================================
-      // CREATE SOCIAL NOTIFICATION
+      // CREATE NOTIFICATION
       // =========================================================
 
       if (body.action === "create_notification") {
@@ -1281,32 +928,25 @@ export default {
         requireDatabase(env);
         await ensureSocialTables(env);
 
-        const session =
-          await authenticateSession(
-            env,
-            body.token
-          );
+        const session = await authenticateSession(
+          env,
+          body.token
+        );
 
         if (!session) {
-          return json(
-            {
-              ok: false,
-              error:
-                "Session is invalid or expired."
-            },
-            401,
-            cors
-          );
+          return json({
+            ok: false,
+            error: "Session is invalid or expired."
+          }, 401, cors);
         }
 
-        const type =
-          String(
-            body.type ||
-            body.notification_type ||
-            ""
-          )
-            .trim()
-            .toLowerCase();
+        const type = String(
+          body.type ||
+          body.notification_type ||
+          ""
+        )
+          .trim()
+          .toLowerCase();
 
         const supportedTypes = [
           "like",
@@ -1316,94 +956,57 @@ export default {
         ];
 
         if (!supportedTypes.includes(type)) {
-          return json(
-            {
-              ok: false,
-              error:
-                "Unsupported notification type."
-            },
-            400,
-            cors
-          );
+          return json({
+            ok: false,
+            error: "Unsupported notification type."
+          }, 400, cors);
         }
 
-        const target =
-          await findTargetUser(
-            env,
-            body
-          );
+        const target = await findTargetUser(env, body);
 
         if (!target) {
-          return json(
-            {
-              ok: false,
-              error:
-                "Notification target user not found."
-            },
-            404,
-            cors
-          );
+          return json({
+            ok: false,
+            error: "Notification target user not found."
+          }, 404, cors);
         }
 
-        if (
-          target.id ===
-          session.user.id
-        ) {
-          return json(
-            {
-              ok: true,
-              skipped: true,
-              message:
-                "Self notification skipped."
-            },
-            200,
-            cors
-          );
+        if (target.id === session.user.id) {
+          return json({
+            ok: true,
+            skipped: true,
+            message: "Self notification skipped."
+          }, 200, cors);
         }
 
-        const postId =
-          cleanNullableText(
-            body.post_id ||
-            body.postId,
-            300
-          );
+        const postId = cleanNullableText(
+          body.post_id ||
+          body.postId,
+          300
+        );
 
         const message =
-          cleanNullableText(
-            body.message,
-            500
-          ) ||
+          cleanNullableText(body.message, 500) ||
           defaultNotificationMessage(
             type,
             session.user
           );
 
         const notification =
-          await createSocialNotification(
-            env,
-            {
-              targetUserId:
-                target.id,
-              actorUserId:
-                session.user.id,
-              type,
-              postId,
-              message,
-              createdAt:
-                new Date().toISOString()
-            }
-          );
+          await createSocialNotification(env, {
+            targetUserId: target.id,
+            actorUserId: session.user.id,
+            type,
+            postId,
+            message,
+            createdAt: new Date().toISOString()
+          });
 
-        return json(
-          {
-            ok: true,
-            message:
-              "Notification created.",
-            notification
-          },
-          201,
-          cors
-        );
+        return json({
+          ok: true,
+          message: "Notification created.",
+          notification
+        }, 201, cors);
       }
 
 
@@ -1416,177 +1019,123 @@ export default {
         requireDatabase(env);
         await ensureSocialTables(env);
 
-        const session =
-          await authenticateSession(
-            env,
-            body.token
-          );
+        const session = await authenticateSession(
+          env,
+          body.token
+        );
 
         if (!session) {
-          return json(
-            {
-              ok: false,
-              error:
-                "Session is invalid or expired."
-            },
-            401,
-            cors
-          );
+          return json({
+            ok: false,
+            error: "Session is invalid or expired."
+          }, 401, cors);
         }
 
-        let limit =
-          Number(body.limit || 100);
+        let limit = Number(body.limit || 100);
 
-        if (
-          !Number.isFinite(limit) ||
-          limit < 1
-        ) {
+        if (!Number.isFinite(limit) || limit < 1) {
           limit = 100;
         }
 
-        limit =
-          Math.min(
-            Math.floor(limit),
-            200
-          );
+        limit = Math.min(Math.floor(limit), 200);
 
-        const result =
-          await env.STAGYLIGHT_DB
-            .prepare(
-              `SELECT
-                n.id,
-                n.target_user_id,
-                n.actor_user_id,
-                n.type,
-                n.post_id,
-                n.message,
-                n.is_read,
-                n.created_at,
-                u.username AS actor_username,
-                u.display_name AS actor_display_name,
-                u.profile_image_url AS actor_profile_image_url
-               FROM social_notifications n
-               LEFT JOIN users u
-                 ON u.id = n.actor_user_id
-               WHERE n.target_user_id = ?
-               ORDER BY n.created_at DESC
-               LIMIT ?`
-            )
-            .bind(
-              session.user.id,
-              limit
-            )
-            .all();
+        const result = await env.STAGYLIGHT_DB
+          .prepare(`
+            SELECT
+              n.id,
+              n.target_user_id,
+              n.actor_user_id,
+              n.type,
+              n.post_id,
+              n.message,
+              n.is_read,
+              n.created_at,
+              u.username AS actor_username,
+              u.display_name AS actor_display_name,
+              u.profile_image_url AS actor_profile_image_url
+            FROM social_notifications n
+            LEFT JOIN users u
+              ON u.id = n.actor_user_id
+            WHERE n.target_user_id = ?
+            ORDER BY n.created_at DESC
+            LIMIT ?
+          `)
+          .bind(
+            session.user.id,
+            limit
+          )
+          .all();
 
         const notifications =
-          (result.results || [])
-            .map(
-              row => ({
-                id: row.id,
-                target_user_id:
-                  row.target_user_id,
-                actor_user_id:
-                  row.actor_user_id,
-                actor_username:
-                  row.actor_username ||
-                  "",
-                actor_display_name:
-                  row.actor_display_name ||
-                  row.actor_username ||
-                  "STAGYLIGHT User",
-                actor_profile_image_url:
-                  row.actor_profile_image_url ||
-                  null,
-                type:
-                  row.type,
-                post_id:
-                  row.post_id ||
-                  null,
-                message:
-                  row.message ||
-                  "",
-                is_read:
-                  Number(
-                    row.is_read || 0
-                  ) === 1,
-                created_at:
-                  row.created_at
-              })
-            );
+          (result.results || []).map(row => ({
+            id: row.id,
+            target_user_id: row.target_user_id,
+            actor_user_id: row.actor_user_id,
+            actor_username:
+              row.actor_username || "",
+            actor_display_name:
+              row.actor_display_name ||
+              row.actor_username ||
+              "STAGYLIGHT User",
+            actor_profile_image_url:
+              row.actor_profile_image_url || null,
+            type: row.type,
+            post_id: row.post_id || null,
+            message: row.message || "",
+            is_read:
+              Number(row.is_read || 0) === 1,
+            created_at: row.created_at
+          }));
 
         const unread =
           notifications.filter(
             item => !item.is_read
           ).length;
 
-        return json(
-          {
-            ok: true,
-            notifications,
-            total:
-              notifications.length,
-            unread
-          },
-          200,
-          cors
-        );
+        return json({
+          ok: true,
+          notifications,
+          total: notifications.length,
+          unread
+        }, 200, cors);
       }
 
 
       // =========================================================
-      // GET UNREAD NOTIFICATION COUNT
+      // NOTIFICATION COUNT
       // =========================================================
 
-      if (
-        body.action ===
-        "get_notification_count"
-      ) {
+      if (body.action === "get_notification_count") {
 
         requireDatabase(env);
         await ensureSocialTables(env);
 
-        const session =
-          await authenticateSession(
-            env,
-            body.token
-          );
+        const session = await authenticateSession(
+          env,
+          body.token
+        );
 
         if (!session) {
-          return json(
-            {
-              ok: false,
-              error:
-                "Session is invalid or expired."
-            },
-            401,
-            cors
-          );
+          return json({
+            ok: false,
+            error: "Session is invalid or expired."
+          }, 401, cors);
         }
 
-        const row =
-          await env.STAGYLIGHT_DB
-            .prepare(
-              `SELECT COUNT(*) AS total
-               FROM social_notifications
-               WHERE target_user_id = ?
-                 AND is_read = 0`
-            )
-            .bind(
-              session.user.id
-            )
-            .first();
+        const row = await env.STAGYLIGHT_DB
+          .prepare(`
+            SELECT COUNT(*) AS total
+            FROM social_notifications
+            WHERE target_user_id = ?
+              AND is_read = 0
+          `)
+          .bind(session.user.id)
+          .first();
 
-        return json(
-          {
-            ok: true,
-            unread:
-              Number(
-                row?.total || 0
-              )
-          },
-          200,
-          cors
-        );
+        return json({
+          ok: true,
+          unread: Number(row?.total || 0)
+        }, 200, cors);
       }
 
 
@@ -1594,73 +1143,53 @@ export default {
       // MARK ONE NOTIFICATION READ
       // =========================================================
 
-      if (
-        body.action ===
-        "mark_notification_read"
-      ) {
+      if (body.action === "mark_notification_read") {
 
         requireDatabase(env);
         await ensureSocialTables(env);
 
-        const session =
-          await authenticateSession(
-            env,
-            body.token
-          );
+        const session = await authenticateSession(
+          env,
+          body.token
+        );
 
         if (!session) {
-          return json(
-            {
-              ok: false,
-              error:
-                "Session is invalid or expired."
-            },
-            401,
-            cors
-          );
+          return json({
+            ok: false,
+            error: "Session is invalid or expired."
+          }, 401, cors);
         }
 
-        const notificationId =
-          cleanText(
-            body.notification_id ||
-            body.id,
-            200
-          );
+        const notificationId = cleanText(
+          body.notification_id ||
+          body.id,
+          200
+        );
 
         if (!notificationId) {
-          return json(
-            {
-              ok: false,
-              error:
-                "Missing notification_id."
-            },
-            400,
-            cors
-          );
+          return json({
+            ok: false,
+            error: "Missing notification_id."
+          }, 400, cors);
         }
 
         await env.STAGYLIGHT_DB
-          .prepare(
-            `UPDATE social_notifications
-             SET is_read = 1
-             WHERE id = ?
-               AND target_user_id = ?`
-          )
+          .prepare(`
+            UPDATE social_notifications
+            SET is_read = 1
+            WHERE id = ?
+              AND target_user_id = ?
+          `)
           .bind(
             notificationId,
             session.user.id
           )
           .run();
 
-        return json(
-          {
-            ok: true,
-            message:
-              "Notification marked as read."
-          },
-          200,
-          cors
-        );
+        return json({
+          ok: true,
+          message: "Notification marked as read."
+        }, 200, cors);
       }
 
 
@@ -1668,102 +1197,559 @@ export default {
       // MARK ALL NOTIFICATIONS READ
       // =========================================================
 
-      if (
-        body.action ===
-        "mark_notifications_read"
-      ) {
+      if (body.action === "mark_notifications_read") {
 
         requireDatabase(env);
         await ensureSocialTables(env);
 
-        const session =
-          await authenticateSession(
-            env,
-            body.token
-          );
+        const session = await authenticateSession(
+          env,
+          body.token
+        );
 
         if (!session) {
-          return json(
-            {
-              ok: false,
-              error:
-                "Session is invalid or expired."
-            },
-            401,
-            cors
-          );
+          return json({
+            ok: false,
+            error: "Session is invalid or expired."
+          }, 401, cors);
         }
 
         await env.STAGYLIGHT_DB
-          .prepare(
-            `UPDATE social_notifications
-             SET is_read = 1
-             WHERE target_user_id = ?
-               AND is_read = 0`
-          )
-          .bind(
-            session.user.id
-          )
+          .prepare(`
+            UPDATE social_notifications
+            SET is_read = 1
+            WHERE target_user_id = ?
+              AND is_read = 0
+          `)
+          .bind(session.user.id)
           .run();
 
-        return json(
-          {
-            ok: true,
-            unread: 0,
-            message:
-              "Notifications marked as read."
-          },
-          200,
-          cors
-        );
+        return json({
+          ok: true,
+          unread: 0,
+          message: "Notifications marked as read."
+        }, 200, cors);
       }
 
 
       // =========================================================
-      // STAGYLIGHT AI HEALTH CHECK
+      // SEND MESSAGE
+      // =========================================================
+
+      if (body.action === "send_message") {
+
+        requireDatabase(env);
+        await ensureSocialTables(env);
+        await ensureMessageTables(env);
+
+        const session = await authenticateSession(
+          env,
+          body.token
+        );
+
+        if (!session) {
+          return json({
+            ok: false,
+            error: "Session is invalid or expired."
+          }, 401, cors);
+        }
+
+        const target = await findTargetUser(env, body);
+
+        if (!target) {
+          return json({
+            ok: false,
+            error: "Message recipient not found."
+          }, 404, cors);
+        }
+
+        if (target.id === session.user.id) {
+          return json({
+            ok: false,
+            error: "You cannot message yourself."
+          }, 400, cors);
+        }
+
+        let messageType = String(
+          body.message_type ||
+          body.messageType ||
+          body.type ||
+          "text"
+        )
+          .trim()
+          .slice(0, 40);
+
+        if (!messageType) {
+          messageType = "text";
+        }
+
+        const textContent = cleanNullableText(
+          body.text ||
+          body.message ||
+          body.text_content,
+          5000
+        );
+
+        let payloadJson = null;
+
+        if (
+          body.payload !== undefined &&
+          body.payload !== null
+        ) {
+          try {
+            payloadJson =
+              JSON.stringify(body.payload)
+                .slice(0, 50000);
+          } catch (_) {}
+        } else if (
+          body.payload_json !== undefined &&
+          body.payload_json !== null
+        ) {
+          payloadJson =
+            String(body.payload_json)
+              .slice(0, 50000);
+        }
+
+        if (
+          messageType.toLowerCase() === "text" &&
+          !textContent
+        ) {
+          return json({
+            ok: false,
+            error: "Message cannot be empty."
+          }, 400, cors);
+        }
+
+        if (!textContent && !payloadJson) {
+          return json({
+            ok: false,
+            error: "Message content is required."
+          }, 400, cors);
+        }
+
+        const id = crypto.randomUUID();
+        const now = new Date().toISOString();
+
+        await env.STAGYLIGHT_DB
+          .prepare(`
+            INSERT INTO social_messages (
+              id,
+              sender_user_id,
+              recipient_user_id,
+              message_type,
+              text_content,
+              payload_json,
+              is_read,
+              created_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?, 0, ?)
+          `)
+          .bind(
+            id,
+            session.user.id,
+            target.id,
+            messageType,
+            textContent,
+            payloadJson,
+            now
+          )
+          .run();
+
+        await createSocialNotification(env, {
+          targetUserId: target.id,
+          actorUserId: session.user.id,
+          type: "message",
+          postId: null,
+          message:
+            `${session.user.display_name || session.user.username} sent you a message.`,
+          createdAt: now
+        });
+
+        return json({
+          ok: true,
+          message: "Message sent.",
+          data: {
+            id,
+            sender_user_id: session.user.id,
+            sender_username:
+              session.user.username || "",
+            sender_display_name:
+              session.user.display_name ||
+              session.user.username ||
+              "STAGYLIGHT User",
+            sender_profile_image_url:
+              session.user.profile_image_url || null,
+            recipient_user_id: target.id,
+            recipient_username:
+              target.username || "",
+            recipient_display_name:
+              target.display_name ||
+              target.username ||
+              "STAGYLIGHT User",
+            recipient_profile_image_url:
+              target.profile_image_url || null,
+            message_type: messageType,
+            text: textContent || "",
+            text_content: textContent || "",
+            payload: parsePayload(payloadJson),
+            payload_json: payloadJson,
+            is_read: false,
+            created_at: now
+          }
+        }, 201, cors);
+      }
+
+
+      // =========================================================
+      // GET MESSAGES
+      // =========================================================
+
+      if (body.action === "get_messages") {
+
+        requireDatabase(env);
+        await ensureMessageTables(env);
+
+        const session = await authenticateSession(
+          env,
+          body.token
+        );
+
+        if (!session) {
+          return json({
+            ok: false,
+            error: "Session is invalid or expired."
+          }, 401, cors);
+        }
+
+        const target = await findTargetUser(env, body);
+
+        if (!target) {
+          return json({
+            ok: false,
+            error: "Conversation user not found."
+          }, 404, cors);
+        }
+
+        if (target.id === session.user.id) {
+          return json({
+            ok: false,
+            error: "Invalid conversation."
+          }, 400, cors);
+        }
+
+        let limit = Number(body.limit || 300);
+
+        if (!Number.isFinite(limit) || limit < 1) {
+          limit = 300;
+        }
+
+        limit = Math.min(Math.floor(limit), 500);
+
+        const result = await env.STAGYLIGHT_DB
+          .prepare(`
+            SELECT
+              m.id,
+              m.sender_user_id,
+              m.recipient_user_id,
+              m.message_type,
+              m.text_content,
+              m.payload_json,
+              m.is_read,
+              m.created_at,
+
+              su.username AS sender_username,
+              su.display_name AS sender_display_name,
+              su.profile_image_url AS sender_profile_image_url,
+
+              ru.username AS recipient_username,
+              ru.display_name AS recipient_display_name,
+              ru.profile_image_url AS recipient_profile_image_url
+
+            FROM social_messages m
+
+            LEFT JOIN users su
+              ON su.id = m.sender_user_id
+
+            LEFT JOIN users ru
+              ON ru.id = m.recipient_user_id
+
+            WHERE
+              (
+                m.sender_user_id = ?
+                AND m.recipient_user_id = ?
+              )
+              OR
+              (
+                m.sender_user_id = ?
+                AND m.recipient_user_id = ?
+              )
+
+            ORDER BY m.created_at ASC
+            LIMIT ?
+          `)
+          .bind(
+            session.user.id,
+            target.id,
+            target.id,
+            session.user.id,
+            limit
+          )
+          .all();
+
+        const messages =
+          (result.results || []).map(
+            normalizeMessageRow
+          );
+
+        return json({
+          ok: true,
+          target_user: publicUser(target),
+          messages,
+          total: messages.length
+        }, 200, cors);
+      }
+
+
+      // =========================================================
+      // GET CONVERSATIONS
+      // =========================================================
+
+      if (body.action === "get_conversations") {
+
+        requireDatabase(env);
+        await ensureMessageTables(env);
+
+        const session = await authenticateSession(
+          env,
+          body.token
+        );
+
+        if (!session) {
+          return json({
+            ok: false,
+            error: "Session is invalid or expired."
+          }, 401, cors);
+        }
+
+        const result = await env.STAGYLIGHT_DB
+          .prepare(`
+            SELECT
+              m.id,
+              m.sender_user_id,
+              m.recipient_user_id,
+              m.message_type,
+              m.text_content,
+              m.payload_json,
+              m.is_read,
+              m.created_at,
+
+              su.username AS sender_username,
+              su.display_name AS sender_display_name,
+              su.profile_image_url AS sender_profile_image_url,
+              su.availability AS sender_availability,
+
+              ru.username AS recipient_username,
+              ru.display_name AS recipient_display_name,
+              ru.profile_image_url AS recipient_profile_image_url,
+              ru.availability AS recipient_availability
+
+            FROM social_messages m
+
+            LEFT JOIN users su
+              ON su.id = m.sender_user_id
+
+            LEFT JOIN users ru
+              ON ru.id = m.recipient_user_id
+
+            WHERE
+              m.sender_user_id = ?
+              OR m.recipient_user_id = ?
+
+            ORDER BY m.created_at DESC
+            LIMIT 1000
+          `)
+          .bind(
+            session.user.id,
+            session.user.id
+          )
+          .all();
+
+        const rows = result.results || [];
+        const map = {};
+
+        for (const row of rows) {
+
+          const sentByMe =
+            row.sender_user_id === session.user.id;
+
+          const otherId =
+            sentByMe
+              ? row.recipient_user_id
+              : row.sender_user_id;
+
+          if (!otherId) {
+            continue;
+          }
+
+          if (!map[otherId]) {
+
+            const username =
+              sentByMe
+                ? row.recipient_username
+                : row.sender_username;
+
+            const displayName =
+              sentByMe
+                ? row.recipient_display_name
+                : row.sender_display_name;
+
+            const avatar =
+              sentByMe
+                ? row.recipient_profile_image_url
+                : row.sender_profile_image_url;
+
+            const availability =
+              sentByMe
+                ? row.recipient_availability
+                : row.sender_availability;
+
+            map[otherId] = {
+              user_id: otherId,
+              id: otherId,
+              username: username || "",
+              name:
+                displayName ||
+                username ||
+                "STAGYLIGHT User",
+              display_name:
+                displayName ||
+                username ||
+                "STAGYLIGHT User",
+              avatar: avatar || null,
+              profile_image_url: avatar || null,
+              status: availability || "",
+              availability: availability || "",
+              preview: messagePreview(row),
+              last_message:
+                messagePreview(row),
+              last_message_at: row.created_at,
+              created_at: row.created_at,
+              unread_count: 0
+            };
+          }
+
+          if (
+            row.recipient_user_id === session.user.id &&
+            Number(row.is_read || 0) === 0
+          ) {
+            map[otherId].unread_count += 1;
+          }
+        }
+
+        const conversations =
+          Object.values(map).sort(
+            (a, b) =>
+              String(b.last_message_at || "")
+                .localeCompare(
+                  String(a.last_message_at || "")
+                )
+          );
+
+        return json({
+          ok: true,
+          conversations,
+          total: conversations.length
+        }, 200, cors);
+      }
+
+
+      // =========================================================
+      // MARK MESSAGES READ
+      // =========================================================
+
+      if (body.action === "mark_messages_read") {
+
+        requireDatabase(env);
+        await ensureMessageTables(env);
+
+        const session = await authenticateSession(
+          env,
+          body.token
+        );
+
+        if (!session) {
+          return json({
+            ok: false,
+            error: "Session is invalid or expired."
+          }, 401, cors);
+        }
+
+        const target = await findTargetUser(env, body);
+
+        if (!target) {
+          return json({
+            ok: false,
+            error: "Conversation user not found."
+          }, 404, cors);
+        }
+
+        await env.STAGYLIGHT_DB
+          .prepare(`
+            UPDATE social_messages
+            SET is_read = 1
+            WHERE recipient_user_id = ?
+              AND sender_user_id = ?
+              AND is_read = 0
+          `)
+          .bind(
+            session.user.id,
+            target.id
+          )
+          .run();
+
+        return json({
+          ok: true,
+          unread: 0,
+          message: "Messages marked as read."
+        }, 200, cors);
+      }
+
+
+      // =========================================================
+      // AI HEALTH CHECK
       // =========================================================
 
       if (body.action === "health_check") {
 
-        return json(
-          {
-            ok: true,
-            service: "STAGYLIGHT AI",
-            status: "connected",
-            message:
-              "STAGYLIGHT AI Worker is connected and responding.",
-            fal_called: false
-          },
-          200,
-          cors
-        );
+        return json({
+          ok: true,
+          service: "STAGYLIGHT AI",
+          status: "connected",
+          message:
+            "STAGYLIGHT AI Worker is connected and responding.",
+          fal_called: false
+        }, 200, cors);
       }
 
 
       // =========================================================
-      // Q-STICKER GENERATION
+      // Q-STICKER
       // =========================================================
 
       if (body.action === "create_sticker") {
 
         if (!body.image_url) {
-          return json(
-            {
-              ok: false,
-              error:
-                "Missing Master Q image."
-            },
-            400,
-            cors
-          );
+          return json({
+            ok: false,
+            error: "Missing Master Q image."
+          }, 400, cors);
         }
 
-        let stickerType =
-          String(
-            body.sticker_type || ""
-          )
-            .trim()
-            .toLowerCase();
+        let stickerType = String(
+          body.sticker_type || ""
+        )
+          .trim()
+          .toLowerCase();
 
         if (stickerType === "happy") {
           stickerType = "haha";
@@ -1778,84 +1764,50 @@ export default {
           "celebrate"
         ];
 
-        if (
-          !supportedStickers.includes(
-            stickerType
-          )
-        ) {
-          return json(
-            {
-              ok: false,
-              error:
-                "Unsupported sticker type."
-            },
-            400,
-            cors
-          );
+        if (!supportedStickers.includes(stickerType)) {
+          return json({
+            ok: false,
+            error: "Unsupported sticker type."
+          }, 400, cors);
         }
 
-        const result =
-          await submitFal(
-            env.FAL_KEY,
-            body.image_url,
-            getStickerPrompt(
-              stickerType
-            ),
-            "medium"
-          );
+        const result = await submitFal(
+          env.FAL_KEY,
+          body.image_url,
+          getStickerPrompt(stickerType),
+          "medium"
+        );
 
-        if (
-          !result.ok ||
-          !result.data
-        ) {
+        if (!result.ok || !result.data) {
 
           console.error(
             "Q-STICKER FAL ERROR",
             JSON.stringify({
-              sticker_type:
-                stickerType,
-              fal_status:
-                result.status,
-              fal_response:
-                result.text
+              sticker_type: stickerType,
+              fal_status: result.status,
+              fal_response: result.text
             })
           );
 
-          return json(
-            {
-              ok: false,
-              error:
-                "Sticker generation submission failed.",
-              fal_status:
-                result.status,
-              details:
-                result.text
-            },
-            500,
-            cors
-          );
+          return json({
+            ok: false,
+            error: "Sticker generation submission failed.",
+            fal_status: result.status,
+            details: result.text
+          }, 500, cors);
         }
 
-        return json(
-          {
-            ok: true,
-            message:
-              "Q-Sticker submitted.",
-            sticker_type:
-              stickerType,
-            request_id:
-              result.data.request_id ||
-              null,
-            status_url:
-              result.data.status_url ||
-              null,
-            response_url:
-              result.data.response_url ||
-              null
-          },
-          200,
-          cors
-        );
+        return json({
+          ok: true,
+          message: "Q-Sticker submitted.",
+          sticker_type: stickerType,
+          request_id:
+            result.data.request_id || null,
+          status_url:
+            result.data.status_url || null,
+          response_url:
+            result.data.response_url || null
+        }, 200, cors);
       }
 
 
@@ -1870,10 +1822,7 @@ export default {
             env,
             "stagylight-main-ai-controller"
           ).fetch(
-            internalRequest(
-              "job_test",
-              body
-            )
+            internalRequest("job_test", body)
           ),
           cors
         );
@@ -1881,13 +1830,12 @@ export default {
 
 
       // =========================================================
-      // CREATE TWO-STAGE Q JOB
+      // CREATE AI JOB
       // =========================================================
 
       if (body.action === "create_job") {
 
-        const jobId =
-          crypto.randomUUID();
+        const jobId = crypto.randomUUID();
 
         return forward(
           await controller(
@@ -1899,8 +1847,7 @@ export default {
               {
                 job_id: jobId,
                 image_url:
-                  body.image_url ||
-                  null
+                  body.image_url || null
               }
             )
           ),
@@ -1920,31 +1867,20 @@ export default {
       ) {
 
         if (!body.job_id) {
-          return json(
-            {
-              ok: false,
-              error:
-                "Missing job_id."
-            },
-            400,
-            cors
-          );
+          return json({
+            ok: false,
+            error: "Missing job_id."
+          }, 400, cors);
         }
 
         if (
-          body.action ===
-            "start_job" &&
+          body.action === "start_job" &&
           !body.image_url
         ) {
-          return json(
-            {
-              ok: false,
-              error:
-                "Missing image_url."
-            },
-            400,
-            cors
-          );
+          return json({
+            ok: false,
+            error: "Missing image_url."
+          }, 400, cors);
         }
 
         return forward(
@@ -1963,7 +1899,7 @@ export default {
 
 
       // =========================================================
-      // FAL STATUS / RESULT PROXY
+      // FAL STATUS
       // =========================================================
 
       if (
@@ -1971,16 +1907,15 @@ export default {
         body.url
       ) {
 
-        const r =
-          await fetch(
-            body.url,
-            {
-              headers: {
-                "Authorization":
-                  `Key ${env.FAL_KEY}`
-              }
+        const r = await fetch(
+          body.url,
+          {
+            headers: {
+              "Authorization":
+                `Key ${env.FAL_KEY}`
             }
-          );
+          }
+        );
 
         return new Response(
           await r.text(),
@@ -1989,9 +1924,7 @@ export default {
             headers: {
               ...cors,
               "Content-Type":
-                r.headers.get(
-                  "Content-Type"
-                ) ||
+                r.headers.get("Content-Type") ||
                 "application/json"
             }
           }
@@ -2000,28 +1933,22 @@ export default {
 
 
       // =========================================================
-      // LEGACY SINGLE-STAGE ROUTE
+      // LEGACY AI ROUTE
       // =========================================================
 
       if (!body.image_url) {
 
-        return json(
-          {
-            ok: false,
-            error:
-              "No reference image received."
-          },
-          400,
-          cors
-        );
+        return json({
+          ok: false,
+          error: "No reference image received."
+        }, 400, cors);
       }
 
-      const r =
-        await submitFal(
-          env.FAL_KEY,
-          body.image_url,
-          getIdentityPrompt()
-        );
+      const r = await submitFal(
+        env.FAL_KEY,
+        body.image_url,
+        getIdentityPrompt()
+      );
 
       return new Response(
         r.text,
@@ -2029,24 +1956,19 @@ export default {
           status: r.status,
           headers: {
             ...cors,
-            "Content-Type":
-              "application/json"
+            "Content-Type": "application/json"
           }
         }
       );
 
     } catch (e) {
 
-      return json(
-        {
-          ok: false,
-          error:
-            e.message ||
-            "Unexpected server error."
-        },
-        500,
-        cors
-      );
+      return json({
+        ok: false,
+        error:
+          e.message ||
+          "Unexpected server error."
+      }, 500, cors);
     }
   }
 };
@@ -2067,60 +1989,38 @@ export class AIJobController {
 
     try {
 
-      const body =
-        await request.json();
+      const body = await request.json();
 
-      if (
-        body.action ===
-        "job_test"
-      ) {
+      if (body.action === "job_test") {
 
         return controllerJson({
           ok: true,
-          controller:
-            "AIJobController",
+          controller: "AIJobController",
           message:
             "STAGYLIGHT two-stage AI controller ready",
           fal_called: false
         });
       }
 
-      if (
-        body.action ===
-        "create_job"
-      ) {
+      if (body.action === "create_job") {
 
-        const now =
-          new Date().toISOString();
+        const now = new Date().toISOString();
 
         const job = {
-          job_id:
-            body.job_id,
+          job_id: body.job_id,
           status: "created",
           stage: "waiting",
-          source_image:
-            body.image_url ||
-            null,
-          stage_1_status:
-            "not_started",
-          stage_1_request_id:
-            null,
-          stage_1_status_url:
-            null,
-          stage_1_response_url:
-            null,
-          stage_1_image:
-            null,
-          stage_2_status:
-            "not_started",
-          stage_2_request_id:
-            null,
-          stage_2_status_url:
-            null,
-          stage_2_response_url:
-            null,
-          stage_2_image:
-            null,
+          source_image: body.image_url || null,
+          stage_1_status: "not_started",
+          stage_1_request_id: null,
+          stage_1_status_url: null,
+          stage_1_response_url: null,
+          stage_1_image: null,
+          stage_2_status: "not_started",
+          stage_2_request_id: null,
+          stage_2_status_url: null,
+          stage_2_response_url: null,
+          stage_2_image: null,
           final_image: null,
           error: null,
           created_at: now,
@@ -2128,38 +2028,25 @@ export class AIJobController {
           fal_called: false
         };
 
-        await this.ctx.storage.put(
-          "job",
-          job
-        );
+        await this.ctx.storage.put("job", job);
 
         return controllerJson({
           ok: true,
-          message:
-            "STAGYLIGHT AI job created",
+          message: "STAGYLIGHT AI job created",
           job
         });
       }
 
-      if (
-        body.action ===
-        "get_job"
-      ) {
+      if (body.action === "get_job") {
 
         const job =
-          await this.ctx.storage.get(
-            "job"
-          );
+          await this.ctx.storage.get("job");
 
         if (!job) {
-          return controllerJson(
-            {
-              ok: false,
-              error:
-                "Job not found."
-            },
-            404
-          );
+          return controllerJson({
+            ok: false,
+            error: "Job not found."
+          }, 404);
         }
 
         return controllerJson({
@@ -2168,372 +2055,217 @@ export class AIJobController {
         });
       }
 
-      if (
-        body.action ===
-        "start_job"
-      ) {
+      if (body.action === "start_job") {
 
         let job =
-          await this.ctx.storage.get(
-            "job"
-          );
+          await this.ctx.storage.get("job");
 
         if (!job) {
-          return controllerJson(
-            {
-              ok: false,
-              error:
-                "Job not found."
-            },
-            404
-          );
+          return controllerJson({
+            ok: false,
+            error: "Job not found."
+          }, 404);
         }
 
         if (!body.image_url) {
-          return controllerJson(
-            {
-              ok: false,
-              error:
-                "Missing image_url."
-            },
-            400
-          );
+          return controllerJson({
+            ok: false,
+            error: "Missing image_url."
+          }, 400);
         }
 
-        if (
-          job.stage_1_status !==
-          "not_started"
-        ) {
+        if (job.stage_1_status !== "not_started") {
           return controllerJson({
             ok: true,
-            message:
-              "Stage 1 already started.",
+            message: "Stage 1 already started.",
             job
           });
         }
 
-        job.source_image =
-          body.image_url;
+        job.source_image = body.image_url;
+        job.status = "processing";
+        job.stage = "stage_1";
+        job.stage_1_status = "submitting";
 
-        job.status =
-          "processing";
+        await saveJob(this.ctx, job);
 
-        job.stage =
-          "stage_1";
-
-        job.stage_1_status =
-          "submitting";
-
-        await saveJob(
-          this.ctx,
-          job
+        const result = await submitFal(
+          this.env.FAL_KEY,
+          body.image_url,
+          getIdentityPrompt()
         );
 
-        const result =
-          await submitFal(
-            this.env.FAL_KEY,
-            body.image_url,
-            getIdentityPrompt()
-          );
+        if (!result.ok || !result.data) {
 
-        if (
-          !result.ok ||
-          !result.data
-        ) {
-
-          job.status =
-            "error";
-
-          job.stage_1_status =
-            "error";
-
+          job.status = "error";
+          job.stage_1_status = "error";
           job.error =
             result.text ||
             "Stage 1 submission failed.";
 
-          await saveJob(
-            this.ctx,
-            job
-          );
+          await saveJob(this.ctx, job);
 
-          return controllerJson(
-            {
-              ok: false,
-              error:
-                job.error,
-              job
-            },
-            500
-          );
+          return controllerJson({
+            ok: false,
+            error: job.error,
+            job
+          }, 500);
         }
 
-        job.stage_1_status =
-          "submitted";
-
+        job.stage_1_status = "submitted";
         job.stage_1_request_id =
-          result.data.request_id ||
-          null;
-
+          result.data.request_id || null;
         job.stage_1_status_url =
-          result.data.status_url ||
-          null;
-
+          result.data.status_url || null;
         job.stage_1_response_url =
-          result.data.response_url ||
-          null;
+          result.data.response_url || null;
+        job.fal_called = true;
 
-        job.fal_called =
-          true;
-
-        await saveJob(
-          this.ctx,
-          job
-        );
+        await saveJob(this.ctx, job);
 
         return controllerJson({
           ok: true,
-          message:
-            "Stage 1 submitted.",
+          message: "Stage 1 submitted.",
           job
         });
       }
 
-      if (
-        body.action ===
-        "advance_job"
-      ) {
+      if (body.action === "advance_job") {
 
         let job =
-          await this.ctx.storage.get(
-            "job"
-          );
+          await this.ctx.storage.get("job");
 
         if (!job) {
-          return controllerJson(
-            {
-              ok: false,
-              error:
-                "Job not found."
-            },
-            404
-          );
+          return controllerJson({
+            ok: false,
+            error: "Job not found."
+          }, 404);
         }
 
-        if (
-          job.status ===
-          "completed"
-        ) {
+        if (job.status === "completed") {
           return controllerJson({
             ok: true,
-            message:
-              "Q Master is ready.",
+            message: "Q Master is ready.",
             job
           });
         }
 
-        if (
-          job.status ===
-          "error"
-        ) {
-          return controllerJson(
-            {
-              ok: false,
-              error:
-                job.error ||
-                "AI job failed.",
-              job
-            },
-            500
-          );
+        if (job.status === "error") {
+          return controllerJson({
+            ok: false,
+            error:
+              job.error ||
+              "AI job failed.",
+            job
+          }, 500);
         }
 
         if (
-          job.stage_1_status ===
-            "submitted" ||
-          job.stage_1_status ===
-            "processing"
+          job.stage_1_status === "submitted" ||
+          job.stage_1_status === "processing"
         ) {
 
-          const check =
-            await checkFal(
-              job.stage_1_status_url,
-              job.stage_1_response_url,
-              this.env.FAL_KEY
-            );
+          const check = await checkFal(
+            job.stage_1_status_url,
+            job.stage_1_response_url,
+            this.env.FAL_KEY
+          );
 
-          if (
-            check.state ===
-            "processing"
-          ) {
+          if (check.state === "processing") {
 
-            job.stage_1_status =
-              "processing";
-
-            await saveJob(
-              this.ctx,
-              job
-            );
+            job.stage_1_status = "processing";
+            await saveJob(this.ctx, job);
 
             return controllerJson({
               ok: true,
-              message:
-                "Stage 1 is processing.",
+              message: "Stage 1 is processing.",
               job
             });
           }
 
-          if (
-            check.state ===
-            "error"
-          ) {
+          if (check.state === "error") {
 
-            job.status =
-              "error";
+            job.status = "error";
+            job.stage_1_status = "error";
+            job.error = check.error;
 
-            job.stage_1_status =
-              "error";
+            await saveJob(this.ctx, job);
 
-            job.error =
-              check.error;
-
-            await saveJob(
-              this.ctx,
+            return controllerJson({
+              ok: false,
+              error: check.error,
               job
-            );
-
-            return controllerJson(
-              {
-                ok: false,
-                error:
-                  check.error,
-                job
-              },
-              500
-            );
+            }, 500);
           }
 
           const stage1Image =
-            extractImage(
-              check.data
-            );
+            extractImage(check.data);
 
           if (!stage1Image) {
 
-            job.status =
-              "error";
-
-            job.stage_1_status =
-              "error";
-
+            job.status = "error";
+            job.stage_1_status = "error";
             job.error =
               "Stage 1 completed but no image was returned.";
 
-            await saveJob(
-              this.ctx,
-              job
-            );
+            await saveJob(this.ctx, job);
 
-            return controllerJson(
-              {
-                ok: false,
-                error:
-                  job.error,
-                job
-              },
-              500
-            );
+            return controllerJson({
+              ok: false,
+              error: job.error,
+              job
+            }, 500);
           }
 
-          job.stage_1_status =
-            "completed";
+          job.stage_1_status = "completed";
+          job.stage_1_image = stage1Image;
+          job.stage = "stage_2";
 
-          job.stage_1_image =
-            stage1Image;
-
-          job.stage =
-            "stage_2";
-
-          await saveJob(
-            this.ctx,
-            job
-          );
+          await saveJob(this.ctx, job);
         }
 
         if (
-          job.stage_1_status ===
-            "completed" &&
-          job.stage_2_status ===
-            "not_started"
+          job.stage_1_status === "completed" &&
+          job.stage_2_status === "not_started"
         ) {
 
-          job.stage_2_status =
-            "submitting";
+          job.stage_2_status = "submitting";
+          job.stage = "stage_2";
 
-          job.stage =
-            "stage_2";
+          await saveJob(this.ctx, job);
 
-          await saveJob(
-            this.ctx,
-            job
+          const result = await submitFal(
+            this.env.FAL_KEY,
+            job.stage_1_image,
+            getQMasterPrompt()
           );
 
-          const result =
-            await submitFal(
-              this.env.FAL_KEY,
-              job.stage_1_image,
-              getQMasterPrompt()
-            );
+          if (!result.ok || !result.data) {
 
-          if (
-            !result.ok ||
-            !result.data
-          ) {
-
-            job.status =
-              "error";
-
-            job.stage_2_status =
-              "error";
-
+            job.status = "error";
+            job.stage_2_status = "error";
             job.error =
               result.text ||
               "Stage 2 submission failed.";
 
-            await saveJob(
-              this.ctx,
-              job
-            );
+            await saveJob(this.ctx, job);
 
-            return controllerJson(
-              {
-                ok: false,
-                error:
-                  job.error,
-                job
-              },
-              500
-            );
+            return controllerJson({
+              ok: false,
+              error: job.error,
+              job
+            }, 500);
           }
 
-          job.stage_2_status =
-            "submitted";
-
+          job.stage_2_status = "submitted";
           job.stage_2_request_id =
-            result.data.request_id ||
-            null;
-
+            result.data.request_id || null;
           job.stage_2_status_url =
-            result.data.status_url ||
-            null;
-
+            result.data.status_url || null;
           job.stage_2_response_url =
-            result.data.response_url ||
-            null;
+            result.data.response_url || null;
 
-          await saveJob(
-            this.ctx,
-            job
-          );
+          await saveJob(this.ctx, job);
 
           return controllerJson({
             ok: true,
@@ -2544,167 +2276,103 @@ export class AIJobController {
         }
 
         if (
-          job.stage_2_status ===
-            "submitted" ||
-          job.stage_2_status ===
-            "processing"
+          job.stage_2_status === "submitted" ||
+          job.stage_2_status === "processing"
         ) {
 
-          const check =
-            await checkFal(
-              job.stage_2_status_url,
-              job.stage_2_response_url,
-              this.env.FAL_KEY
-            );
+          const check = await checkFal(
+            job.stage_2_status_url,
+            job.stage_2_response_url,
+            this.env.FAL_KEY
+          );
 
-          if (
-            check.state ===
-            "processing"
-          ) {
+          if (check.state === "processing") {
 
-            job.stage_2_status =
-              "processing";
-
-            await saveJob(
-              this.ctx,
-              job
-            );
+            job.stage_2_status = "processing";
+            await saveJob(this.ctx, job);
 
             return controllerJson({
               ok: true,
-              message:
-                "Stage 2 is processing.",
+              message: "Stage 2 is processing.",
               job
             });
           }
 
-          if (
-            check.state ===
-            "error"
-          ) {
+          if (check.state === "error") {
 
-            job.status =
-              "error";
+            job.status = "error";
+            job.stage_2_status = "error";
+            job.error = check.error;
 
-            job.stage_2_status =
-              "error";
+            await saveJob(this.ctx, job);
 
-            job.error =
-              check.error;
-
-            await saveJob(
-              this.ctx,
+            return controllerJson({
+              ok: false,
+              error: check.error,
               job
-            );
-
-            return controllerJson(
-              {
-                ok: false,
-                error:
-                  check.error,
-                job
-              },
-              500
-            );
+            }, 500);
           }
 
           const finalImage =
-            extractImage(
-              check.data
-            );
+            extractImage(check.data);
 
           if (!finalImage) {
 
-            job.status =
-              "error";
-
-            job.stage_2_status =
-              "error";
-
+            job.status = "error";
+            job.stage_2_status = "error";
             job.error =
               "Stage 2 completed but no image was returned.";
 
-            await saveJob(
-              this.ctx,
-              job
-            );
+            await saveJob(this.ctx, job);
 
-            return controllerJson(
-              {
-                ok: false,
-                error:
-                  job.error,
-                job
-              },
-              500
-            );
+            return controllerJson({
+              ok: false,
+              error: job.error,
+              job
+            }, 500);
           }
 
-          job.stage_2_status =
-            "completed";
+          job.stage_2_status = "completed";
+          job.stage_2_image = finalImage;
+          job.final_image = finalImage;
+          job.status = "completed";
+          job.stage = "completed";
+          job.error = null;
 
-          job.stage_2_image =
-            finalImage;
-
-          job.final_image =
-            finalImage;
-
-          job.status =
-            "completed";
-
-          job.stage =
-            "completed";
-
-          job.error =
-            null;
-
-          await saveJob(
-            this.ctx,
-            job
-          );
+          await saveJob(this.ctx, job);
 
           return controllerJson({
             ok: true,
-            message:
-              "STAGYLIGHT Q Master completed.",
+            message: "STAGYLIGHT Q Master completed.",
             job
           });
         }
 
         return controllerJson({
           ok: true,
-          message:
-            "Job is waiting.",
+          message: "Job is waiting.",
           job
         });
       }
 
-      return controllerJson(
-        {
-          ok: false,
-          error:
-            "Unknown controller action."
-        },
-        400
-      );
+      return controllerJson({
+        ok: false,
+        error: "Unknown controller action."
+      }, 400);
 
     } catch (e) {
 
-      return controllerJson(
-        {
-          ok: false,
-          error:
-            e.message
-        },
-        500
-      );
+      return controllerJson({
+        ok: false,
+        error: e.message
+      }, 500);
     }
   }
 }
 
 
 // ===============================================================
-// SOCIAL DATABASE HELPERS
+// SOCIAL TABLES
 // ===============================================================
 
 async function ensureSocialTables(env) {
@@ -2712,8 +2380,8 @@ async function ensureSocialTables(env) {
   requireDatabase(env);
 
   await env.STAGYLIGHT_DB
-    .prepare(
-      `CREATE TABLE IF NOT EXISTS social_follows (
+    .prepare(`
+      CREATE TABLE IF NOT EXISTS social_follows (
         id TEXT PRIMARY KEY,
         follower_user_id TEXT NOT NULL,
         following_user_id TEXT NOT NULL,
@@ -2722,31 +2390,31 @@ async function ensureSocialTables(env) {
           follower_user_id,
           following_user_id
         )
-      )`
-    )
+      )
+    `)
     .run();
 
   await env.STAGYLIGHT_DB
-    .prepare(
-      `CREATE INDEX IF NOT EXISTS idx_social_follows_follower
-       ON social_follows (
-         follower_user_id
-       )`
-    )
+    .prepare(`
+      CREATE INDEX IF NOT EXISTS idx_social_follows_follower
+      ON social_follows (
+        follower_user_id
+      )
+    `)
     .run();
 
   await env.STAGYLIGHT_DB
-    .prepare(
-      `CREATE INDEX IF NOT EXISTS idx_social_follows_following
-       ON social_follows (
-         following_user_id
-       )`
-    )
+    .prepare(`
+      CREATE INDEX IF NOT EXISTS idx_social_follows_following
+      ON social_follows (
+        following_user_id
+      )
+    `)
     .run();
 
   await env.STAGYLIGHT_DB
-    .prepare(
-      `CREATE TABLE IF NOT EXISTS social_notifications (
+    .prepare(`
+      CREATE TABLE IF NOT EXISTS social_notifications (
         id TEXT PRIMARY KEY,
         target_user_id TEXT NOT NULL,
         actor_user_id TEXT,
@@ -2755,148 +2423,310 @@ async function ensureSocialTables(env) {
         message TEXT,
         is_read INTEGER NOT NULL DEFAULT 0,
         created_at TEXT NOT NULL
-      )`
-    )
+      )
+    `)
     .run();
 
   await env.STAGYLIGHT_DB
-    .prepare(
-      `CREATE INDEX IF NOT EXISTS idx_social_notifications_target
-       ON social_notifications (
-         target_user_id,
-         created_at
-       )`
-    )
+    .prepare(`
+      CREATE INDEX IF NOT EXISTS idx_social_notifications_target
+      ON social_notifications (
+        target_user_id,
+        created_at
+      )
+    `)
     .run();
 
   await env.STAGYLIGHT_DB
-    .prepare(
-      `CREATE INDEX IF NOT EXISTS idx_social_notifications_unread
-       ON social_notifications (
-         target_user_id,
-         is_read
-       )`
-    )
+    .prepare(`
+      CREATE INDEX IF NOT EXISTS idx_social_notifications_unread
+      ON social_notifications (
+        target_user_id,
+        is_read
+      )
+    `)
     .run();
 }
 
 
-async function findTargetUser(
-  env,
-  body
-) {
+// ===============================================================
+// MESSAGE TABLES
+// ===============================================================
 
-  const id =
-    cleanText(
-      body.target_user_id ||
-      body.user_id ||
-      "",
-      200
-    );
+async function ensureMessageTables(env) {
+
+  requireDatabase(env);
+
+  await env.STAGYLIGHT_DB
+    .prepare(`
+      CREATE TABLE IF NOT EXISTS social_messages (
+        id TEXT PRIMARY KEY,
+        sender_user_id TEXT NOT NULL,
+        recipient_user_id TEXT NOT NULL,
+        message_type TEXT NOT NULL DEFAULT 'text',
+        text_content TEXT,
+        payload_json TEXT,
+        is_read INTEGER NOT NULL DEFAULT 0,
+        created_at TEXT NOT NULL
+      )
+    `)
+    .run();
+
+  await env.STAGYLIGHT_DB
+    .prepare(`
+      CREATE INDEX IF NOT EXISTS idx_social_messages_sender_recipient
+      ON social_messages (
+        sender_user_id,
+        recipient_user_id,
+        created_at
+      )
+    `)
+    .run();
+
+  await env.STAGYLIGHT_DB
+    .prepare(`
+      CREATE INDEX IF NOT EXISTS idx_social_messages_recipient_sender
+      ON social_messages (
+        recipient_user_id,
+        sender_user_id,
+        created_at
+      )
+    `)
+    .run();
+
+  await env.STAGYLIGHT_DB
+    .prepare(`
+      CREATE INDEX IF NOT EXISTS idx_social_messages_unread
+      ON social_messages (
+        recipient_user_id,
+        is_read,
+        created_at
+      )
+    `)
+    .run();
+}
+
+
+function parsePayload(value) {
+
+  if (!value) {
+    return null;
+  }
+
+  try {
+    return JSON.parse(value);
+  } catch (_) {
+    return null;
+  }
+}
+
+
+function normalizeMessageRow(row) {
+
+  return {
+    id: row.id,
+
+    sender_user_id:
+      row.sender_user_id,
+
+    sender_username:
+      row.sender_username || "",
+
+    sender_display_name:
+      row.sender_display_name ||
+      row.sender_username ||
+      "STAGYLIGHT User",
+
+    sender_profile_image_url:
+      row.sender_profile_image_url ||
+      null,
+
+    recipient_user_id:
+      row.recipient_user_id,
+
+    recipient_username:
+      row.recipient_username || "",
+
+    recipient_display_name:
+      row.recipient_display_name ||
+      row.recipient_username ||
+      "STAGYLIGHT User",
+
+    recipient_profile_image_url:
+      row.recipient_profile_image_url ||
+      null,
+
+    message_type:
+      row.message_type || "text",
+
+    type:
+      row.message_type || "text",
+
+    text:
+      row.text_content || "",
+
+    text_content:
+      row.text_content || "",
+
+    payload:
+      parsePayload(row.payload_json),
+
+    payload_json:
+      row.payload_json || null,
+
+    is_read:
+      Number(row.is_read || 0) === 1,
+
+    created_at:
+      row.created_at
+  };
+}
+
+
+function messagePreview(row) {
+
+  if (row.text_content) {
+    return String(row.text_content)
+      .trim()
+      .slice(0, 100);
+  }
+
+  const type =
+    String(row.message_type || "")
+      .toLowerCase();
+
+  if (
+    type === "qsticker" ||
+    type === "q_sticker" ||
+    type === "sticker" ||
+    type === "demosticker"
+  ) {
+    return "✨ My Q Sticker";
+  }
+
+  if (
+    type === "photo" ||
+    type === "image"
+  ) {
+    return "📷 Photo";
+  }
+
+  if (type === "video") {
+    return "🎬 Video";
+  }
+
+  if (type === "attachment") {
+    return "📎 Attachment";
+  }
+
+  return "New message";
+}
+
+
+// ===============================================================
+// SOCIAL HELPERS
+// ===============================================================
+
+async function findTargetUser(env, body) {
+
+  const id = cleanText(
+    body.target_user_id ||
+    body.user_id ||
+    body.recipient_user_id ||
+    body.recipientUserId ||
+    "",
+    200
+  );
 
   if (id) {
 
-    const byId =
-      await env.STAGYLIGHT_DB
-        .prepare(
-          `SELECT *
-           FROM users
-           WHERE id = ?
-           LIMIT 1`
-        )
-        .bind(id)
-        .first();
+    const byId = await env.STAGYLIGHT_DB
+      .prepare(`
+        SELECT *
+        FROM users
+        WHERE id = ?
+        LIMIT 1
+      `)
+      .bind(id)
+      .first();
 
     if (byId) {
       return byId;
     }
   }
 
-  const username =
-    normalizeUsername(
-      body.target_username ||
-      body.username ||
-      ""
-    );
+  const username = normalizeUsername(
+    body.target_username ||
+    body.username ||
+    body.recipient_username ||
+    body.recipientUsername ||
+    ""
+  );
 
   if (!username) {
     return null;
   }
 
   return await env.STAGYLIGHT_DB
-    .prepare(
-      `SELECT *
-       FROM users
-       WHERE lower(username) = ?
-       LIMIT 1`
-    )
+    .prepare(`
+      SELECT *
+      FROM users
+      WHERE lower(username) = ?
+      LIMIT 1
+    `)
     .bind(username)
     .first();
 }
 
 
-async function getFollowCounts(
-  env,
-  userId
-) {
+async function getFollowCounts(env, userId) {
 
-  const followers =
-    await env.STAGYLIGHT_DB
-      .prepare(
-        `SELECT COUNT(*) AS total
-         FROM social_follows
-         WHERE following_user_id = ?`
-      )
-      .bind(userId)
-      .first();
+  const followers = await env.STAGYLIGHT_DB
+    .prepare(`
+      SELECT COUNT(*) AS total
+      FROM social_follows
+      WHERE following_user_id = ?
+    `)
+    .bind(userId)
+    .first();
 
-  const following =
-    await env.STAGYLIGHT_DB
-      .prepare(
-        `SELECT COUNT(*) AS total
-         FROM social_follows
-         WHERE follower_user_id = ?`
-      )
-      .bind(userId)
-      .first();
+  const following = await env.STAGYLIGHT_DB
+    .prepare(`
+      SELECT COUNT(*) AS total
+      FROM social_follows
+      WHERE follower_user_id = ?
+    `)
+    .bind(userId)
+    .first();
 
   return {
     followers:
-      Number(
-        followers?.total || 0
-      ),
+      Number(followers?.total || 0),
     following:
-      Number(
-        following?.total || 0
-      )
+      Number(following?.total || 0)
   };
 }
 
 
-async function createSocialNotification(
-  env,
-  data
-) {
+async function createSocialNotification(env, data) {
 
   if (
     !data.targetUserId ||
     !data.actorUserId ||
-    data.targetUserId ===
-      data.actorUserId
+    data.targetUserId === data.actorUserId
   ) {
     return null;
   }
 
-  const id =
-    crypto.randomUUID();
+  const id = crypto.randomUUID();
 
   const createdAt =
     data.createdAt ||
     new Date().toISOString();
 
   await env.STAGYLIGHT_DB
-    .prepare(
-      `INSERT INTO social_notifications (
+    .prepare(`
+      INSERT INTO social_notifications (
         id,
         target_user_id,
         actor_user_id,
@@ -2906,51 +2736,33 @@ async function createSocialNotification(
         is_read,
         created_at
       )
-      VALUES (?, ?, ?, ?, ?, ?, 0, ?)`
-    )
+      VALUES (?, ?, ?, ?, ?, ?, 0, ?)
+    `)
     .bind(
       id,
       data.targetUserId,
       data.actorUserId,
-      cleanText(
-        data.type,
-        40
-      ),
-      cleanNullableText(
-        data.postId,
-        300
-      ),
-      cleanNullableText(
-        data.message,
-        500
-      ),
+      cleanText(data.type, 40),
+      cleanNullableText(data.postId, 300),
+      cleanNullableText(data.message, 500),
       createdAt
     )
     .run();
 
   return {
     id,
-    target_user_id:
-      data.targetUserId,
-    actor_user_id:
-      data.actorUserId,
-    type:
-      data.type,
-    post_id:
-      data.postId || null,
-    message:
-      data.message || "",
+    target_user_id: data.targetUserId,
+    actor_user_id: data.actorUserId,
+    type: data.type,
+    post_id: data.postId || null,
+    message: data.message || "",
     is_read: false,
-    created_at:
-      createdAt
+    created_at: createdAt
   };
 }
 
 
-function defaultNotificationMessage(
-  type,
-  actor
-) {
+function defaultNotificationMessage(type, actor) {
 
   const name =
     actor.display_name ||
@@ -2992,7 +2804,6 @@ function requireDatabase(env) {
 
 
 function normalizeEmail(value) {
-
   return String(value || "")
     .trim()
     .toLowerCase();
@@ -3000,7 +2811,6 @@ function normalizeEmail(value) {
 
 
 function normalizeUsername(value) {
-
   return String(value || "")
     .trim()
     .replace(/^@+/, "")
@@ -3009,43 +2819,30 @@ function normalizeUsername(value) {
 
 
 function isValidEmail(email) {
-
   return (
     email.length <= 254 &&
-    /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(
-      email
-    )
+    /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
   );
 }
 
 
 function isValidUsername(username) {
-
   return (
     username.length >= 3 &&
     username.length <= 30 &&
-    /^[a-z0-9._]+$/.test(
-      username
-    )
+    /^[a-z0-9._]+$/.test(username)
   );
 }
 
 
-function cleanText(
-  value,
-  maxLength
-) {
-
+function cleanText(value, maxLength) {
   return String(value || "")
     .trim()
     .slice(0, maxLength);
 }
 
 
-function cleanNullableText(
-  value,
-  maxLength
-) {
+function cleanNullableText(value, maxLength) {
 
   if (
     value === null ||
@@ -3073,25 +2870,16 @@ function publicUser(user) {
     id: user.id,
     email: user.email,
     username: user.username,
-    display_name:
-      user.display_name,
-    auth_provider:
-      user.auth_provider,
+    display_name: user.display_name,
+    auth_provider: user.auth_provider,
     profile_image_url:
-      user.profile_image_url ||
-      null,
-    bio:
-      user.bio || null,
-    location:
-      user.location || null,
-    languages:
-      user.languages || null,
-    availability:
-      user.availability || null,
-    created_at:
-      user.created_at,
-    updated_at:
-      user.updated_at
+      user.profile_image_url || null,
+    bio: user.bio || null,
+    location: user.location || null,
+    languages: user.languages || null,
+    availability: user.availability || null,
+    created_at: user.created_at,
+    updated_at: user.updated_at
   };
 }
 
@@ -3100,24 +2888,20 @@ function publicUser(user) {
 // PASSWORD HASHING
 // ===============================================================
 
-const PASSWORD_ITERATIONS =
-  100000;
+const PASSWORD_ITERATIONS = 100000;
 
-async function hashPassword(
-  password
-) {
 
-  const salt =
-    crypto.getRandomValues(
-      new Uint8Array(16)
-    );
+async function hashPassword(password) {
 
-  const hash =
-    await derivePassword(
-      password,
-      salt,
-      PASSWORD_ITERATIONS
-    );
+  const salt = crypto.getRandomValues(
+    new Uint8Array(16)
+  );
+
+  const hash = await derivePassword(
+    password,
+    salt,
+    PASSWORD_ITERATIONS
+  );
 
   return [
     "pbkdf2_sha256",
@@ -3128,32 +2912,24 @@ async function hashPassword(
 }
 
 
-async function verifyPassword(
-  password,
-  stored
-) {
+async function verifyPassword(password, stored) {
 
   try {
 
     const parts =
-      String(stored || "")
-        .split("$");
+      String(stored || "").split("$");
 
     if (
       parts.length !== 4 ||
-      parts[0] !==
-        "pbkdf2_sha256"
+      parts[0] !== "pbkdf2_sha256"
     ) {
       return false;
     }
 
-    const iterations =
-      Number(parts[1]);
+    const iterations = Number(parts[1]);
 
     if (
-      !Number.isInteger(
-        iterations
-      ) ||
+      !Number.isInteger(iterations) ||
       iterations < 100000 ||
       iterations > 1000000
     ) {
@@ -3161,21 +2937,16 @@ async function verifyPassword(
     }
 
     const salt =
-      base64ToBytes(
-        parts[2]
-      );
+      base64ToBytes(parts[2]);
 
     const expected =
-      base64ToBytes(
-        parts[3]
-      );
+      base64ToBytes(parts[3]);
 
-    const actual =
-      await derivePassword(
-        password,
-        salt,
-        iterations
-      );
+    const actual = await derivePassword(
+      password,
+      salt,
+      iterations
+    );
 
     return constantTimeEqual(
       actual,
@@ -3195,20 +2966,15 @@ async function derivePassword(
   iterations
 ) {
 
-  const encoder =
-    new TextEncoder();
+  const encoder = new TextEncoder();
 
   const keyMaterial =
     await crypto.subtle.importKey(
       "raw",
       encoder.encode(password),
-      {
-        name: "PBKDF2"
-      },
+      { name: "PBKDF2" },
       false,
-      [
-        "deriveBits"
-      ]
+      ["deriveBits"]
     );
 
   const bits =
@@ -3227,10 +2993,7 @@ async function derivePassword(
 }
 
 
-function constantTimeEqual(
-  a,
-  b
-) {
+function constantTimeEqual(a, b) {
 
   if (
     !(a instanceof Uint8Array) ||
@@ -3245,13 +3008,8 @@ function constantTimeEqual(
 
   let difference = 0;
 
-  for (
-    let i = 0;
-    i < a.length;
-    i++
-  ) {
-    difference |=
-      a[i] ^ b[i];
+  for (let i = 0; i < a.length; i++) {
+    difference |= a[i] ^ b[i];
   }
 
   return difference === 0;
@@ -3262,44 +3020,30 @@ function constantTimeEqual(
 // SESSION MANAGEMENT
 // ===============================================================
 
-async function createSession(
-  env,
-  userId
-) {
+async function createSession(env, userId) {
 
-  const sessionId =
-    crypto.randomUUID();
-
-  const token =
-    randomToken(32);
-
-  const tokenHash =
-    await sha256Hex(token);
-
-  const createdAt =
-    new Date();
+  const sessionId = crypto.randomUUID();
+  const token = randomToken(32);
+  const tokenHash = await sha256Hex(token);
+  const createdAt = new Date();
 
   const expiresAt =
     new Date(
       createdAt.getTime() +
-      30 *
-      24 *
-      60 *
-      60 *
-      1000
+      30 * 24 * 60 * 60 * 1000
     );
 
   await env.STAGYLIGHT_DB
-    .prepare(
-      `INSERT INTO sessions (
+    .prepare(`
+      INSERT INTO sessions (
         id,
         user_id,
         token_hash,
         created_at,
         expires_at
       )
-      VALUES (?, ?, ?, ?, ?)`
-    )
+      VALUES (?, ?, ?, ?, ?)
+    `)
     .bind(
       sessionId,
       userId,
@@ -3311,52 +3055,43 @@ async function createSession(
 
   return {
     token,
-    expires_at:
-      expiresAt.toISOString()
+    expires_at: expiresAt.toISOString()
   };
 }
 
 
-async function authenticateSession(
-  env,
-  rawToken
-) {
+async function authenticateSession(env, rawToken) {
 
-  const token =
-    String(rawToken || "");
+  const token = String(rawToken || "");
 
   if (!token) {
     return null;
   }
 
-  const tokenHash =
-    await sha256Hex(token);
+  const tokenHash = await sha256Hex(token);
 
-  const row =
-    await env.STAGYLIGHT_DB
-      .prepare(
-        `SELECT
-          s.id AS session_id,
-          s.user_id AS session_user_id,
-          s.expires_at AS session_expires_at,
-          u.*
-         FROM sessions s
-         JOIN users u
-           ON u.id = s.user_id
-         WHERE s.token_hash = ?
-         LIMIT 1`
-      )
-      .bind(tokenHash)
-      .first();
+  const row = await env.STAGYLIGHT_DB
+    .prepare(`
+      SELECT
+        s.id AS session_id,
+        s.user_id AS session_user_id,
+        s.expires_at AS session_expires_at,
+        u.*
+      FROM sessions s
+      JOIN users u
+        ON u.id = s.user_id
+      WHERE s.token_hash = ?
+      LIMIT 1
+    `)
+    .bind(tokenHash)
+    .first();
 
   if (!row) {
     return null;
   }
 
   const expires =
-    Date.parse(
-      row.session_expires_at
-    );
+    Date.parse(row.session_expires_at);
 
   if (
     !Number.isFinite(expires) ||
@@ -3364,13 +3099,11 @@ async function authenticateSession(
   ) {
 
     await env.STAGYLIGHT_DB
-      .prepare(
-        `DELETE FROM sessions
-         WHERE id = ?`
-      )
-      .bind(
-        row.session_id
-      )
+      .prepare(`
+        DELETE FROM sessions
+        WHERE id = ?
+      `)
+      .bind(row.session_id)
       .run();
 
     return null;
@@ -3380,59 +3113,40 @@ async function authenticateSession(
     id: row.id,
     email: row.email,
     username: row.username,
-    display_name:
-      row.display_name,
-    password_hash:
-      row.password_hash,
-    auth_provider:
-      row.auth_provider,
-    provider_user_id:
-      row.provider_user_id,
-    profile_image_url:
-      row.profile_image_url,
+    display_name: row.display_name,
+    password_hash: row.password_hash,
+    auth_provider: row.auth_provider,
+    provider_user_id: row.provider_user_id,
+    profile_image_url: row.profile_image_url,
     bio: row.bio,
     location: row.location,
     languages: row.languages,
-    availability:
-      row.availability,
-    created_at:
-      row.created_at,
-    updated_at:
-      row.updated_at
+    availability: row.availability,
+    created_at: row.created_at,
+    updated_at: row.updated_at
   };
 
   return {
     user,
-    expires_at:
-      row.session_expires_at
+    expires_at: row.session_expires_at
   };
 }
 
 
-function randomToken(
-  byteLength
-) {
+function randomToken(byteLength) {
 
-  const bytes =
-    crypto.getRandomValues(
-      new Uint8Array(
-        byteLength
-      )
-    );
-
-  return bytesToBase64Url(
-    bytes
+  const bytes = crypto.getRandomValues(
+    new Uint8Array(byteLength)
   );
+
+  return bytesToBase64Url(bytes);
 }
 
 
-async function sha256Hex(
-  value
-) {
+async function sha256Hex(value) {
 
   const bytes =
-    new TextEncoder()
-      .encode(value);
+    new TextEncoder().encode(value);
 
   const digest =
     await crypto.subtle.digest(
@@ -3445,63 +3159,40 @@ async function sha256Hex(
   )
     .map(
       b =>
-        b
-          .toString(16)
-          .padStart(2, "0")
+        b.toString(16).padStart(2, "0")
     )
     .join("");
 }
 
 
-function bytesToBase64(
-  bytes
-) {
+function bytesToBase64(bytes) {
 
   let binary = "";
 
-  for (
-    let i = 0;
-    i < bytes.length;
-    i++
-  ) {
-    binary +=
-      String.fromCharCode(
-        bytes[i]
-      );
+  for (let i = 0; i < bytes.length; i++) {
+    binary += String.fromCharCode(bytes[i]);
   }
 
   return btoa(binary);
 }
 
 
-function base64ToBytes(
-  value
-) {
+function base64ToBytes(value) {
 
-  const binary =
-    atob(value);
+  const binary = atob(value);
 
   const bytes =
-    new Uint8Array(
-      binary.length
-    );
+    new Uint8Array(binary.length);
 
-  for (
-    let i = 0;
-    i < binary.length;
-    i++
-  ) {
-    bytes[i] =
-      binary.charCodeAt(i);
+  for (let i = 0; i < binary.length; i++) {
+    bytes[i] = binary.charCodeAt(i);
   }
 
   return bytes;
 }
 
 
-function bytesToBase64Url(
-  bytes
-) {
+function bytesToBase64Url(bytes) {
 
   return bytesToBase64(bytes)
     .replace(/\+/g, "-")
@@ -3511,7 +3202,7 @@ function bytesToBase64Url(
 
 
 // ===============================================================
-// FAL SUBMIT
+// FAL
 // ===============================================================
 
 async function submitFal(
@@ -3521,56 +3212,36 @@ async function submitFal(
   quality = "high"
 ) {
 
-  const r =
-    await fetch(
-      "https://queue.fal.run/fal-ai/gpt-image-1.5/edit",
-      {
-        method: "POST",
+  const r = await fetch(
+    "https://queue.fal.run/fal-ai/gpt-image-1.5/edit",
+    {
+      method: "POST",
 
-        headers: {
-          "Authorization":
-            `Key ${falKey}`,
+      headers: {
+        "Authorization": `Key ${falKey}`,
+        "Content-Type": "application/json"
+      },
 
-          "Content-Type":
-            "application/json"
-        },
+      body: JSON.stringify({
+        prompt,
+        image_urls: [imageUrl],
+        input_fidelity: "high",
+        image_size: "1024x1024",
+        quality,
+        background: "opaque",
+        num_images: 1,
+        output_format: "png",
+        sync_mode: false
+      })
+    }
+  );
 
-        body: JSON.stringify({
-          prompt,
-
-          image_urls: [
-            imageUrl
-          ],
-
-          input_fidelity:
-            "high",
-
-          image_size:
-            "1024x1024",
-
-          quality: quality,
-
-          background:
-            "opaque",
-
-          num_images: 1,
-
-          output_format:
-            "png",
-
-          sync_mode: false
-        })
-      }
-    );
-
-  const text =
-    await r.text();
+  const text = await r.text();
 
   let data = null;
 
   try {
-    data =
-      JSON.parse(text);
+    data = JSON.parse(text);
   } catch (_) {}
 
   return {
@@ -3582,10 +3253,6 @@ async function submitFal(
 }
 
 
-// ===============================================================
-// FAL STATUS + RESULT
-// ===============================================================
-
 async function checkFal(
   statusUrl,
   responseUrl,
@@ -3595,35 +3262,29 @@ async function checkFal(
   if (!statusUrl) {
     return {
       state: "error",
-      error:
-        "Missing fal.ai status URL."
+      error: "Missing fal.ai status URL."
     };
   }
 
-  const r =
-    await fetch(
-      statusUrl,
-      {
-        headers: {
-          "Authorization":
-            `Key ${falKey}`
-        }
+  const r = await fetch(
+    statusUrl,
+    {
+      headers: {
+        "Authorization": `Key ${falKey}`
       }
-    );
+    }
+  );
 
-  const text =
-    await r.text();
+  const text = await r.text();
 
   let data;
 
   try {
-    data =
-      JSON.parse(text);
+    data = JSON.parse(text);
   } catch (_) {
     return {
       state: "error",
-      error:
-        "Invalid fal.ai status response."
+      error: "Invalid fal.ai status response."
     };
   }
 
@@ -3638,9 +3299,7 @@ async function checkFal(
   }
 
   const status =
-    String(
-      data.status || ""
-    ).toUpperCase();
+    String(data.status || "").toUpperCase();
 
   if (
     status === "IN_QUEUE" ||
@@ -3651,9 +3310,7 @@ async function checkFal(
     };
   }
 
-  if (
-    status !== "COMPLETED"
-  ) {
+  if (status !== "COMPLETED") {
     return {
       state: "processing"
     };
@@ -3667,32 +3324,25 @@ async function checkFal(
     };
   }
 
-  const result =
-    await fetch(
-      responseUrl,
-      {
-        headers: {
-          "Authorization":
-            `Key ${falKey}`
-        }
+  const result = await fetch(
+    responseUrl,
+    {
+      headers: {
+        "Authorization": `Key ${falKey}`
       }
-    );
+    }
+  );
 
-  const resultText =
-    await result.text();
+  const resultText = await result.text();
 
   let resultData;
 
   try {
-    resultData =
-      JSON.parse(
-        resultText
-      );
+    resultData = JSON.parse(resultText);
   } catch (_) {
     return {
       state: "error",
-      error:
-        "Invalid fal.ai result response."
+      error: "Invalid fal.ai result response."
     };
   }
 
@@ -3714,277 +3364,91 @@ async function checkFal(
 
 
 // ===============================================================
-// STAGE 1
+// STAGE 1 PROMPT
 // ===============================================================
 
 function getIdentityPrompt() {
 
   return `
-
 Create ONE premium illustrated portrait of the EXACT SAME ADULT
 PERSON shown in the supplied reference photograph.
 
 This is STAGYLIGHT IDENTITY MASTER — STAGE 1.
 
-This is NOT the final Q character.
-
 IDENTITY IS THE HIGHEST PRIORITY.
 
-The result must immediately look like the SAME PERSON.
+Preserve the person's actual face, hairstyle, skin tone,
+adult age appearance, clothing and accessories.
 
-Preserve the person's actual:
-
-- face length and width
-- forehead
-- cheek structure
-- jawline
-- chin
-- eyebrow shape
-- natural eye shape and size
-- eye spacing
-- eyelids
-- nose shape, width and length
-- mouth shape
-- lip proportions
-- skin tone
-- distinctive facial characteristics
-- adult age appearance
-- visible gender presentation
-
-Do NOT substitute generic anime or cartoon facial features.
-
+Do NOT substitute generic anime facial features.
 Do NOT beautify the person into somebody else.
-
-Preserve the hairstyle extremely carefully:
-
-- haircut
-- hairline
-- length
-- fringe
-- direction
-- side shape
-- top volume
-- texture
-- colour distribution
-
-If the source crops the very highest part of the hair,
-naturally reconstruct the continuation of the SAME hairstyle.
-
-Preserve visible clothing and accessories.
-
-Do NOT add makeup, lipstick, eyeliner, eyeshadow,
-artificial eyelashes, blush or pink cheeks unless clearly
-present in the source.
-
-Keep mature adult facial proportions.
-
 NO baby face.
 NO child appearance.
 NO huge anime eyes.
-NO excessively round cheeks.
-NO tiny nose.
-NO tiny chin.
-
-Create a polished premium digital illustration with mild
-stylization only.
-
-COMPOSITION:
 
 Show the complete hairstyle, head, face, chin, neck,
 shoulders and upper chest.
 
-Leave approximately 10 to 15 percent clean background above
-the highest point of the hairstyle.
-
-Nothing important may touch or leave the canvas.
-
-Center the person on a clean neutral background.
+Leave clean background above the hairstyle.
 
 If illustration style conflicts with recognizable identity,
 PRESERVE IDENTITY.
 
 Generate exactly ONE square portrait.
-
 `;
 }
 
 
 // ===============================================================
-// STAGE 2
+// STAGE 2 PROMPT
 // ===============================================================
 
 function getQMasterPrompt() {
 
   return `
-
 Transform the supplied STAGYLIGHT IDENTITY MASTER into ONE
 premium ADULT Q CHARACTER of the EXACT SAME PERSON.
 
 ABSOLUTE PRIORITY:
-
 PRESERVE THE FACE.
 
-The supplied Identity Master already contains the correct face.
+Do NOT redesign or reinterpret the person's identity.
 
-DO NOT redesign, reinterpret, beautify, simplify or reconstruct
-the face into a typical chibi or anime face.
-
-The final character must be unmistakably the SAME ADULT PERSON.
-
-FACE — ALMOST NO GEOMETRIC CHANGE:
-
-Preserve:
-
-- exact face length-to-width ratio
-- forehead height and width
-- cheek width and placement
-- jawline and jaw angle
-- chin length, width and shape
-- eyebrow shape, thickness and position
-- exact natural eye shape
-- exact eye opening and size
-- iris size relative to eye
-- eye spacing
-- eyelids
-- eyebrow-to-eye distance
-- nose bridge, length and tip
-- nostril width
-- mouth width and shape
-- cupid's bow
-- lip thickness
-- nose-to-mouth distance
-- lower-face length
-- skin tone
-- distinctive facial characteristics
-- adult age appearance
-- visible gender presentation
-
-DO NOT round or widen the face.
-
-DO NOT shorten the lower face.
-
-DO NOT enlarge the forehead.
-
-DO NOT shrink the nose or chin.
-
-The FACE itself should receive MINIMAL Q distortion.
-
-EYES — STRICT LOCK:
-
-DO NOT enlarge, widen or round the eyes.
-
-DO NOT create anime, doll or childlike eyes.
-
-Keep the same natural eye anatomy.
-
-ADULT — STRICT LOCK:
+Preserve face proportions, eyes, nose, mouth, jaw, chin,
+skin tone, adult age appearance and distinctive features.
 
 NO baby face.
-NO toddler.
-NO child.
-NO baby-faced chibi.
+NO child appearance.
+NO huge anime eyes.
 NO inflated cheeks.
 NO tiny nose.
 NO tiny chin.
-NO extremely round head.
-NO youthful doll face.
 
-Q STYLE:
+Create the Q feeling mainly through a slightly larger head,
+compact upper body and premium illustrated rendering.
 
-Create the Q feeling mainly through:
+Preserve the SAME hairstyle, clothing and accessories.
 
-- polished cute illustration rendering
-- slightly larger head relative to body
-- moderately compact shoulders and upper body
-- clean Q-avatar silhouette
-- friendly expression
-- premium sticker presentation
+No unwanted makeup or blush.
 
-Do NOT enlarge facial features to create cuteness.
-
-The face stays recognizable and mature.
-
-Use mild Q proportions only.
-
-HAIR:
-
-Preserve the SAME hairstyle, hairline, haircut, fringe,
-direction, top volume, side shape, texture, length and
-colour distribution.
-
-CLOTHING AND ACCESSORIES:
-
-Preserve the same clothing, colours and visible accessories.
-
-NO MAKEUP:
-
-Do NOT add cosmetic blush, pink cheeks, lipstick,
-eyeliner, eyeshadow, artificial eyelashes or beauty makeup.
-
-EXPRESSION:
-
-Pleasant, friendly and confident adult expression.
-
-Use a small natural smile.
-
-STYLE:
-
-Premium modern STAGYLIGHT Q illustration.
-
-Cute but mature.
-Identity-first.
-Clean digital artwork.
-Refined facial detail.
-Smooth controlled shading.
-Professional avatar/sticker quality.
-
-The FACE should remain more structurally realistic than
-a normal chibi character.
-
-COMPOSITION:
-
-Show entire hairstyle, full head, complete face, chin,
-neck, shoulders and upper body.
-
-Leave approximately 10 to 15 percent clean background
-above the hairstyle.
-
-Center on a clean neutral background.
+Show the entire hairstyle, full head, face, chin, neck,
+shoulders and upper body.
 
 No text.
 No watermark.
-No logo.
 No extra person.
 No collage.
-No multiple versions.
-
-FINAL PRIORITY:
-
-1. SAME FACE
-2. SAME ADULT PERSON
-3. NATURAL ORIGINAL EYES
-4. ORIGINAL FACE LENGTH / JAW / CHIN
-5. ORIGINAL NOSE AND MOUTH
-6. SAME HAIRSTYLE
-7. MILD Q PROPORTIONS
-8. SAME CLOTHING / ACCESSORIES
-9. NO MAKEUP OR BLUSH
-10. PREMIUM STAGYLIGHT QUALITY
 
 IF CUTENESS CONFLICTS WITH IDENTITY:
-
 IDENTITY MUST WIN.
 
-KEEP THE EXISTING FACE AND Q-STYLIZE THE CHARACTER AROUND IT.
-
 Generate exactly ONE square Adult Q Master.
-
 `;
 }
 
 
 // ===============================================================
-// Q-STICKER PROMPTS
+// Q-STICKER PROMPT
 // ===============================================================
 
 function getStickerPrompt(type) {
@@ -3993,129 +3457,38 @@ function getStickerPrompt(type) {
 
     haha: `
 HAPPY / LAUGHING REACTION 😂
-
-Create a genuinely joyful and happy laughing expression.
-
-Use a natural open smile or laugh, cheerful eyes and a playful
-upper-body reaction.
-
-The character should look strongly amused, energetic and happy.
-
-Do not create huge anime eyes.
-Do not distort the mouth beyond recognition.
-Do not change the person's identity.
-
-The result must clearly communicate HAPPY / LAUGHTER without text.
+Create a joyful laughing expression with a natural smile,
+cheerful eyes and energetic happy reaction.
 `,
 
     love: `
 LOVE / AFFECTION REACTION ❤️
-
-Create a sweet, warm and affectionate reaction.
-
-Use a gentle happy smile.
-
-The character should form a clear small HEART gesture using
-the hands near the chest.
-
-The pose should communicate love, affection and appreciation.
-
-Keep the face mature and natural.
-
-Do NOT add romantic makeup, lipstick, blush or exaggerated
-pink cheeks.
-
-The result must clearly communicate LOVE without text.
+Create a warm affectionate expression with a gentle smile
+and a clear small heart hand gesture near the chest.
 `,
 
     sad: `
 SAD / UPSET REACTION 😭
-
-Create a clearly sad and emotionally upset expression.
-
-The mouth may turn slightly downward.
-
-The eyes should look naturally sad and emotional.
-
-Small natural tears are allowed so the emotion is immediately
-understandable.
-
-Do NOT enlarge the eyes.
-Do NOT create giant cartoon eyes.
-Do NOT distort the face.
-Do NOT turn the person into a different character.
-
-Keep the sadness believable while preserving identity.
-
-The result must clearly communicate SADNESS without text.
+Create a clearly sad emotional expression.
+Small natural tears are allowed.
 `,
 
     angry: `
 ANGRY / FRUSTRATED REACTION 😡
-
-Create a clearly angry and frustrated expression.
-
-Use naturally lowered or slightly furrowed eyebrows,
-a serious tense mouth and a confident irritated pose.
-
-The character may use a naturally clenched fist near the body,
-but the pose must remain non-violent and suitable for a social
-reaction sticker.
-
-Do NOT make the face monstrous.
-Do NOT add glowing eyes.
-Do NOT add flames.
-Do NOT distort the face.
-Do NOT change the person's identity.
-
-Keep the same adult face, hairstyle and clothing.
-
-The result must clearly communicate ANGER / FRUSTRATION
-without text.
+Create a clearly angry and frustrated expression with
+naturally furrowed eyebrows and a serious tense mouth.
 `,
 
     like: `
 LIKE / APPROVAL REACTION 👍
-
-Create a positive, confident approval reaction.
-
-The character should display ONE clear thumbs-up gesture.
-
-Use a friendly natural smile and confident happy expression.
-
-The thumb and hand must be anatomically clear and remain
-completely inside the frame.
-
-Do NOT exaggerate the eyes or facial proportions.
-Do NOT change the person's identity.
-
-The result must clearly communicate LIKE / APPROVAL
-without text.
+Create a positive confident approval reaction with ONE
+clear thumbs-up gesture.
 `,
 
     celebrate: `
 CELEBRATE / EXCITED REACTION 🎉
-
-Create a joyful, energetic celebration reaction.
-
-The character should look excited and genuinely happy.
-
-Use an enthusiastic smile and celebratory upper-body pose.
-
-The character may raise both hands in celebration.
-
-Add a SMALL amount of tasteful celebratory confetti around
-the character.
-
-Keep the face fully visible and recognizable.
-
-Do NOT cover the face with confetti.
-Do NOT add written text.
-Do NOT redesign the clothing.
-Do NOT distort the person's identity.
-
-The result must clearly communicate CELEBRATION / SUCCESS
-without text.
+Create an energetic celebration reaction with an enthusiastic
+smile and a small amount of tasteful confetti.
 `
   };
 
@@ -4124,202 +3497,39 @@ without text.
     reactions.haha;
 
   return `
-
 Create exactly ONE premium STAGYLIGHT Q reaction sticker using
 the supplied MASTER Q image.
 
-THE SUPPLIED IMAGE IS THE CHARACTER MASTER.
-
-ABSOLUTE RULE:
-
 KEEP THE EXACT SAME CHARACTER.
 
-DO NOT invent a new Q character.
-DO NOT redesign the face.
-DO NOT reinterpret the person's identity.
-DO NOT change the character's age.
+Preserve the same recognizable adult face, facial structure,
+eyes, nose, mouth, jawline, chin, skin tone, hairstyle,
+clothing and accessories.
 
-============================================================
-IDENTITY LOCK
-============================================================
-
-The underlying facial structure must remain the SAME even when
-the emotion changes the facial muscles.
-
-Preserve:
-
-- same recognizable face
-- same face length-to-width ratio
-- same forehead
-- same cheek structure
-- same jawline
-- same chin
-- same eyebrows
-- same eye placement
-- same natural eye anatomy
-- same nose shape and size
-- same mouth identity
-- same lower-face proportions
-- same skin tone
-- same adult appearance
-- same distinctive facial characteristics
-
-EMOTION MAY CHANGE FACIAL MUSCLES.
-
-EMOTION MUST NOT CHANGE FACIAL IDENTITY.
-
-Do NOT make the face wider or rounder.
-
-Do NOT shorten the face.
-
-Do NOT shrink the nose.
-
-Do NOT shrink the chin.
-
+Do NOT invent a new character.
+Do NOT redesign the face.
 Do NOT make the person younger.
+Do NOT create huge anime eyes.
+Do NOT create a baby face.
 
-============================================================
-HAIR LOCK
-============================================================
-
-Preserve exactly the same:
-
-- hairstyle
-- hairline
-- fringe
-- swept direction
-- top volume
-- side shape
-- length
-- texture
-- hair colour distribution
-
-Do NOT redesign the hairstyle.
-
-============================================================
-CLOTHING + ACCESSORY LOCK
-============================================================
-
-Keep exactly the same main clothing and visible accessories
-as the supplied Master Q.
-
-Do NOT redesign the outfit merely to match the reaction.
-
-============================================================
-Q STYLE LOCK
-============================================================
-
-Match the supplied Master Q's existing illustration style.
-
-Maintain:
-
-- same Q-character design language
-- same level of facial realism
-- same adult Q proportions
-- same rendering quality
-- same smooth controlled shading
-- same premium STAGYLIGHT visual identity
-
-Do NOT convert the character into a generic anime,
-manga or baby chibi character.
-
-============================================================
-REACTION
-============================================================
+REACTION:
 
 ${reaction}
 
-============================================================
-STRICT EYE RULE
-============================================================
+Match the supplied Master Q's existing illustration style.
 
-Expression may naturally change the eyelids.
-
-However:
-
-DO NOT make the eyes larger than the Master Q.
-DO NOT make them rounder to create cuteness.
-DO NOT replace them with generic anime eyes.
-DO NOT create doll eyes.
-
-============================================================
-ADULT LOCK
-============================================================
-
-The character must clearly remain the same adult.
-
-NO baby face.
-NO toddler proportions.
-NO child appearance.
-NO inflated cheeks.
-NO tiny nose.
-NO tiny chin.
-NO youthful doll face.
-
-============================================================
-NO MAKEUP
-============================================================
-
-Do NOT add:
-
-- cosmetic blush
-- artificial pink cheeks
-- lipstick
-- eyeliner
-- eyeshadow
-- artificial eyelashes
-- beauty makeup
-
-============================================================
-COMPOSITION
-============================================================
-
-Show the entire hairstyle and head.
-
-Do NOT crop the top of the hair.
-
-Show enough neck, shoulders, arms and upper body to clearly
-display the reaction gesture when needed.
-
-Keep all important hands and gestures completely inside
-the frame.
-
-Center the character.
-
-Use a clean simple neutral background suitable for a reaction
-sticker.
+Keep all important hands and gestures completely inside frame.
 
 No written text.
-No letters.
 No watermark.
 No logo.
 No extra people.
 No collage.
-No multiple versions.
-
-============================================================
-FINAL PRIORITY
-============================================================
-
-1. EXACT SAME MASTER Q CHARACTER
-2. SAME FACE AND FACIAL STRUCTURE
-3. SAME ADULT IDENTITY
-4. SAME HAIRSTYLE
-5. SAME CLOTHING AND ACCESSORIES
-6. CORRECT REACTION / POSE
-7. SAME Q ART STYLE
-8. NATURAL FACIAL EXPRESSION
-9. NO UNWANTED MAKEUP
-10. PREMIUM STAGYLIGHT QUALITY
 
 IF EMOTION CONFLICTS WITH IDENTITY:
-
 IDENTITY MUST WIN.
 
-CHANGE THE EMOTION, NOT THE PERSON.
-
 Generate exactly ONE square reaction Q-Sticker.
-
 `;
 }
 
@@ -4328,43 +3538,30 @@ Generate exactly ONE square reaction Q-Sticker.
 // AI HELPERS
 // ===============================================================
 
-function controller(
-  env,
-  name
-) {
+function controller(env, name) {
 
-  if (
-    !env.AI_JOB_CONTROLLER
-  ) {
+  if (!env.AI_JOB_CONTROLLER) {
     throw new Error(
       "AI_JOB_CONTROLLER binding is unavailable."
     );
   }
 
   const id =
-    env.AI_JOB_CONTROLLER
-      .idFromName(name);
+    env.AI_JOB_CONTROLLER.idFromName(name);
 
-  return env
-    .AI_JOB_CONTROLLER
-    .get(id);
+  return env.AI_JOB_CONTROLLER.get(id);
 }
 
 
-function internalRequest(
-  action,
-  data
-) {
+function internalRequest(action, data) {
 
   return new Request(
-    "https://stagylight.internal/" +
-      action,
+    "https://stagylight.internal/" + action,
     {
       method: "POST",
 
       headers: {
-        "Content-Type":
-          "application/json"
+        "Content-Type": "application/json"
       },
 
       body: JSON.stringify({
@@ -4376,19 +3573,12 @@ function internalRequest(
 }
 
 
-async function saveJob(
-  ctx,
-  job
-) {
+async function saveJob(ctx, job) {
 
   job.updated_at =
-    new Date()
-      .toISOString();
+    new Date().toISOString();
 
-  await ctx.storage.put(
-    "job",
-    job
-  );
+  await ctx.storage.put("job", job);
 }
 
 
@@ -4396,9 +3586,7 @@ function extractImage(data) {
 
   if (
     data &&
-    Array.isArray(
-      data.images
-    ) &&
+    Array.isArray(data.images) &&
     data.images.length > 0 &&
     data.images[0]?.url
   ) {
@@ -4409,11 +3597,7 @@ function extractImage(data) {
 }
 
 
-function json(
-  data,
-  status,
-  cors
-) {
+function json(data, status, cors) {
 
   return new Response(
     JSON.stringify(data),
@@ -4422,18 +3606,14 @@ function json(
 
       headers: {
         ...cors,
-        "Content-Type":
-          "application/json"
+        "Content-Type": "application/json"
       }
     }
   );
 }
 
 
-function controllerJson(
-  data,
-  status = 200
-) {
+function controllerJson(data, status = 200) {
 
   return new Response(
     JSON.stringify(data),
@@ -4441,29 +3621,23 @@ function controllerJson(
       status,
 
       headers: {
-        "Content-Type":
-          "application/json"
+        "Content-Type": "application/json"
       }
     }
   );
 }
 
 
-async function forward(
-  response,
-  cors
-) {
+async function forward(response, cors) {
 
   return new Response(
     await response.text(),
     {
-      status:
-        response.status,
+      status: response.status,
 
       headers: {
         ...cors,
-        "Content-Type":
-          "application/json"
+        "Content-Type": "application/json"
       }
     }
   );
